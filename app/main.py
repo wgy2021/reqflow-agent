@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Response, status
+from fastapi import FastAPI, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 
 class RequirementCreate(BaseModel):
@@ -61,8 +61,23 @@ def create_requirement(requirement: RequirementCreate) -> dict:
     "/requirements",
     tags=["requirements"],
 )
-def list_requirements() -> list[dict]:
-    return list(requirements.values())
+def list_requirements(
+    priority: int | None = Query(
+        default=None,
+        ge=1,
+        le=3,
+    ),
+) -> list[dict]:
+    all_requirements = list(requirements.values())
+
+    if priority is None:
+        return all_requirements
+
+    return [
+        requirement
+        for requirement in all_requirements
+        if requirement["priority"] == priority
+    ]
 
 @app.get(
     "/requirements/{requirement_id}",

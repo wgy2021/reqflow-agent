@@ -28,7 +28,6 @@ def create_sample_requirement() -> dict:
     )
 
     assert response.status_code == 201
-
     return response.json()
 
 
@@ -143,3 +142,47 @@ def test_delete_requirement() -> None:
 
     assert list_response.status_code == 200
     assert list_response.json() == []
+
+
+def test_list_requirements_filtered_by_priority() -> None:
+    client.post(
+        "/requirements",
+        json={
+            "title": "登录需求",
+            "content": "正确账号密码登录",
+            "priority": 1,
+        },
+    )
+
+    client.post(
+        "/requirements",
+        json={
+            "title": "密码锁定需求",
+            "content": "连续输错密码后锁定账号",
+            "priority": 2,
+        },
+    )
+
+    response = client.get(
+        "/requirements",
+        params={"priority": 2},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "id": 2,
+            "title": "密码锁定需求",
+            "content": "连续输错密码后锁定账号",
+            "priority": 2,
+        }
+    ]
+
+
+def test_list_requirements_with_invalid_priority() -> None:
+    response = client.get(
+        "/requirements",
+        params={"priority": 10},
+    )
+
+    assert response.status_code == 422
