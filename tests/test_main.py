@@ -9,9 +9,27 @@ client = TestClient(main_module.app)
 
 @pytest.fixture(autouse=True)
 def reset_in_memory_store() -> None:
-    """每个测试开始前清空内存数据，避免测试互相影响。"""
+    """每个测试开始前清空内存数据，避免测试之间相互影响。"""
     main_module.requirements.clear()
     main_module.next_requirement_id = 1
+
+
+def create_sample_requirement() -> dict:
+    """创建一条供其他测试使用的示例需求。"""
+    payload = {
+        "title": "用户登录需求",
+        "content": "用户输入正确账号密码后，系统返回访问令牌",
+        "priority": 1,
+    }
+
+    response = client.post(
+        "/requirements",
+        json=payload,
+    )
+
+    assert response.status_code == 201
+
+    return response.json()
 
 
 def test_health_check() -> None:
@@ -65,3 +83,63 @@ def test_create_requirement_with_invalid_priority() -> None:
     )
 
     assert response.status_code == 422
+
+
+def test_get_requirement_by_id() -> None:
+    created_requirement = create_sample_requirement()
+
+    response = client.get(
+        f"/requirements/{created_requirement['id']}"
+    )
+
+    assert response.status_code == 200
+    assert response.json() == created_requirement
+
+
+def test_get_missing_requirement_returns_404() -> None:
+    response = client.get("/requirements/999")
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Requirement not found",
+    }
+
+
+def test_update_requirement() -> None:
+    create_sample_requirement()
+
+    response = client.patch(
+        "/requirements/1",
+        json={
+            "priority": 2,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "id": 1,
+        "title": "用户登录需求",
+        "content": "用户输入正确账号密码后，系统返回访问令牌",
+        "priority": 2,
+    }
+
+
+def test_delete_requirement() -> None:
+    create_sample_requirement()
+
+    delete_response = client.delete("/requirements/1")
+
+    assert delete_response.status_code == 204
+    assert delete_response.content == b""
+
+    get_response = client.get("/requirements/1")
+
+    assert get_response.status_code == 404
+    assert get_response.json() == {
+        "detail": "Requirement not found",
+    }
+
+    list_response = client.get("/requirements")
+
+    assert list_response.status_code == 200
+    assert list_response.json() == []
