@@ -1,21 +1,51 @@
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
-import app.main as main_module
+from app.database import Base, get_db
+from app.main import app
 
 
-client = TestClient(main_module.app)
+TEST_DATABASE_URL = "sqlite://"
+
+test_engine = create_engine(
+    TEST_DATABASE_URL,
+    connect_args={
+        "check_same_thread": False,
+    },
+    poolclass=StaticPool,
+)
+
+TestingSessionLocal = sessionmaker(
+    bind=test_engine,
+    autoflush=False,
+    expire_on_commit=False,
+)
+
+
+def override_get_db():
+    db = TestingSessionLocal()
+
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+app.dependency_overrides[get_db] = override_get_db
+
+client = TestClient(app)
 
 
 @pytest.fixture(autouse=True)
-def reset_in_memory_store() -> None:
-    """每个测试开始前清空内存数据，避免测试之间相互影响。"""
-    main_module.requirements.clear()
-    main_module.next_requirement_id = 1
+def reset_test_database() -> None:
+    Base.metadata.drop_all(bind=test_engine)
+    Base.metadata.create_all(bind=test_engine)
 
 
 def create_sample_requirement() -> dict:
-    """创建一条供其他测试使用的示例需求。"""
     payload = {
         "title": "用户登录需求",
         "content": "用户输入正确账号密码后，系统返回访问令牌",
@@ -165,7 +195,9 @@ def test_list_requirements_filtered_by_priority() -> None:
 
     response = client.get(
         "/requirements",
-        params={"priority": 2},
+        params={
+            "priority": 2,
+        },
     )
 
     assert response.status_code == 200
@@ -182,7 +214,9 @@ def test_list_requirements_filtered_by_priority() -> None:
 def test_list_requirements_with_invalid_priority() -> None:
     response = client.get(
         "/requirements",
-        params={"priority": 10},
+        params={
+            "priority": 10,
+        },
     )
 
     assert response.status_code == 422
