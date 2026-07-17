@@ -15,9 +15,18 @@ from app.models import Requirement
 
 
 class RequirementCreate(BaseModel):
-    title: str = Field(min_length=1, max_length=100)
-    content: str = Field(min_length=1, max_length=5000)
-    priority: int = Field(ge=1, le=3)
+    title: str = Field(
+        min_length=1,
+        max_length=100,
+    )
+    content: str = Field(
+        min_length=1,
+        max_length=5000,
+    )
+    priority: int = Field(
+        ge=1,
+        le=3,
+    )
 
 
 class RequirementUpdate(BaseModel):
@@ -38,6 +47,17 @@ class RequirementUpdate(BaseModel):
     )
 
 
+class RequirementResponse(BaseModel):
+    id: int
+    title: str
+    content: str
+    priority: int
+
+    model_config = {
+        "from_attributes": True,
+    }
+
+
 Base.metadata.create_all(bind=engine)
 
 
@@ -47,8 +67,10 @@ app = FastAPI(
 )
 
 
-
-@app.get("/health", tags=["system"])
+@app.get(
+    "/health",
+    tags=["system"],
+)
 def health_check() -> dict[str, str]:
     return {
         "status": "ok",
@@ -59,13 +81,14 @@ def health_check() -> dict[str, str]:
 
 @app.post(
     "/requirements",
+    response_model=RequirementResponse,
     status_code=status.HTTP_201_CREATED,
     tags=["requirements"],
 )
 def create_requirement(
     requirement: RequirementCreate,
     db: Session = Depends(get_db),
-) -> dict:
+) -> Requirement:
     db_requirement = Requirement(
         title=requirement.title,
         content=requirement.content,
@@ -76,16 +99,12 @@ def create_requirement(
     db.commit()
     db.refresh(db_requirement)
 
-    return {
-        "id": db_requirement.id,
-        "title": db_requirement.title,
-        "content": db_requirement.content,
-        "priority": db_requirement.priority,
-    }
+    return db_requirement
 
 
 @app.get(
     "/requirements",
+    response_model=list[RequirementResponse],
     tags=["requirements"],
 )
 def list_requirements(
@@ -95,7 +114,7 @@ def list_requirements(
         le=3,
     ),
     db: Session = Depends(get_db),
-) -> list[dict]:
+) -> list[Requirement]:
     statement = select(Requirement)
 
     if priority is not None:
@@ -103,26 +122,20 @@ def list_requirements(
             Requirement.priority == priority
         )
 
-    db_requirements = db.scalars(statement).all()
+    return list(
+        db.scalars(statement).all()
+    )
 
-    return [
-        {
-            "id": item.id,
-            "title": item.title,
-            "content": item.content,
-            "priority": item.priority,
-        }
-        for item in db_requirements
-    ]
 
 @app.get(
     "/requirements/{requirement_id}",
+    response_model=RequirementResponse,
     tags=["requirements"],
 )
 def get_requirement(
     requirement_id: int,
     db: Session = Depends(get_db),
-) -> dict:
+) -> Requirement:
     db_requirement = db.get(
         Requirement,
         requirement_id,
@@ -134,23 +147,19 @@ def get_requirement(
             detail="Requirement not found",
         )
 
-    return {
-        "id": db_requirement.id,
-        "title": db_requirement.title,
-        "content": db_requirement.content,
-        "priority": db_requirement.priority,
-    }
+    return db_requirement
 
 
 @app.patch(
     "/requirements/{requirement_id}",
+    response_model=RequirementResponse,
     tags=["requirements"],
 )
 def update_requirement(
     requirement_id: int,
     requirement_update: RequirementUpdate,
     db: Session = Depends(get_db),
-) -> dict:
+) -> Requirement:
     db_requirement = db.get(
         Requirement,
         requirement_id,
@@ -176,12 +185,7 @@ def update_requirement(
     db.commit()
     db.refresh(db_requirement)
 
-    return {
-        "id": db_requirement.id,
-        "title": db_requirement.title,
-        "content": db_requirement.content,
-        "priority": db_requirement.priority,
-    }
+    return db_requirement
 
 
 @app.delete(
