@@ -6,7 +6,6 @@ from fastapi import (
     Response,
     status,
 )
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -16,6 +15,7 @@ from app.schemas import (
     RequirementResponse,
     RequirementUpdate,
 )
+from app.services import requirements as requirement_service
 
 
 router = APIRouter(
@@ -33,17 +33,10 @@ def create_requirement(
     requirement: RequirementCreate,
     db: Session = Depends(get_db),
 ) -> Requirement:
-    db_requirement = Requirement(
-        title=requirement.title,
-        content=requirement.content,
-        priority=requirement.priority,
+    return requirement_service.create_requirement(
+        db=db,
+        requirement=requirement,
     )
-
-    db.add(db_requirement)
-    db.commit()
-    db.refresh(db_requirement)
-
-    return db_requirement
 
 
 @router.get(
@@ -58,15 +51,9 @@ def list_requirements(
     ),
     db: Session = Depends(get_db),
 ) -> list[Requirement]:
-    statement = select(Requirement)
-
-    if priority is not None:
-        statement = statement.where(
-            Requirement.priority == priority
-        )
-
-    return list(
-        db.scalars(statement).all()
+    return requirement_service.list_requirements(
+        db=db,
+        priority=priority,
     )
 
 
@@ -78,9 +65,9 @@ def get_requirement(
     requirement_id: int,
     db: Session = Depends(get_db),
 ) -> Requirement:
-    db_requirement = db.get(
-        Requirement,
-        requirement_id,
+    db_requirement = requirement_service.get_requirement(
+        db=db,
+        requirement_id=requirement_id,
     )
 
     if db_requirement is None:
@@ -101,9 +88,9 @@ def update_requirement(
     requirement_update: RequirementUpdate,
     db: Session = Depends(get_db),
 ) -> Requirement:
-    db_requirement = db.get(
-        Requirement,
-        requirement_id,
+    db_requirement = requirement_service.get_requirement(
+        db=db,
+        requirement_id=requirement_id,
     )
 
     if db_requirement is None:
@@ -112,21 +99,11 @@ def update_requirement(
             detail="Requirement not found",
         )
 
-    update_data = requirement_update.model_dump(
-        exclude_unset=True,
+    return requirement_service.update_requirement(
+        db=db,
+        db_requirement=db_requirement,
+        requirement_update=requirement_update,
     )
-
-    for field_name, field_value in update_data.items():
-        setattr(
-            db_requirement,
-            field_name,
-            field_value,
-        )
-
-    db.commit()
-    db.refresh(db_requirement)
-
-    return db_requirement
 
 
 @router.delete(
@@ -137,9 +114,9 @@ def delete_requirement(
     requirement_id: int,
     db: Session = Depends(get_db),
 ) -> Response:
-    db_requirement = db.get(
-        Requirement,
-        requirement_id,
+    db_requirement = requirement_service.get_requirement(
+        db=db,
+        requirement_id=requirement_id,
     )
 
     if db_requirement is None:
@@ -148,8 +125,10 @@ def delete_requirement(
             detail="Requirement not found",
         )
 
-    db.delete(db_requirement)
-    db.commit()
+    requirement_service.delete_requirement(
+        db=db,
+        db_requirement=db_requirement,
+    )
 
     return Response(
         status_code=status.HTTP_204_NO_CONTENT,
