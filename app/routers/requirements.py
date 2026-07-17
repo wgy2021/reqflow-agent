@@ -1,0 +1,156 @@
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    Response,
+    status,
+)
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from app.models import Requirement
+from app.schemas import (
+    RequirementCreate,
+    RequirementResponse,
+    RequirementUpdate,
+)
+
+
+router = APIRouter(
+    prefix="/requirements",
+    tags=["requirements"],
+)
+
+
+@router.post(
+    "",
+    response_model=RequirementResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_requirement(
+    requirement: RequirementCreate,
+    db: Session = Depends(get_db),
+) -> Requirement:
+    db_requirement = Requirement(
+        title=requirement.title,
+        content=requirement.content,
+        priority=requirement.priority,
+    )
+
+    db.add(db_requirement)
+    db.commit()
+    db.refresh(db_requirement)
+
+    return db_requirement
+
+
+@router.get(
+    "",
+    response_model=list[RequirementResponse],
+)
+def list_requirements(
+    priority: int | None = Query(
+        default=None,
+        ge=1,
+        le=3,
+    ),
+    db: Session = Depends(get_db),
+) -> list[Requirement]:
+    statement = select(Requirement)
+
+    if priority is not None:
+        statement = statement.where(
+            Requirement.priority == priority
+        )
+
+    return list(
+        db.scalars(statement).all()
+    )
+
+
+@router.get(
+    "/{requirement_id}",
+    response_model=RequirementResponse,
+)
+def get_requirement(
+    requirement_id: int,
+    db: Session = Depends(get_db),
+) -> Requirement:
+    db_requirement = db.get(
+        Requirement,
+        requirement_id,
+    )
+
+    if db_requirement is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Requirement not found",
+        )
+
+    return db_requirement
+
+
+@router.patch(
+    "/{requirement_id}",
+    response_model=RequirementResponse,
+)
+def update_requirement(
+    requirement_id: int,
+    requirement_update: RequirementUpdate,
+    db: Session = Depends(get_db),
+) -> Requirement:
+    db_requirement = db.get(
+        Requirement,
+        requirement_id,
+    )
+
+    if db_requirement is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Requirement not found",
+        )
+
+    update_data = requirement_update.model_dump(
+        exclude_unset=True,
+    )
+
+    for field_name, field_value in update_data.items():
+        setattr(
+            db_requirement,
+            field_name,
+            field_value,
+        )
+
+    db.commit()
+    db.refresh(db_requirement)
+
+    return db_requirement
+
+
+@router.delete(
+    "/{requirement_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_requirement(
+    requirement_id: int,
+    db: Session = Depends(get_db),
+) -> Response:
+    db_requirement = db.get(
+        Requirement,
+        requirement_id,
+    )
+
+    if db_requirement is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Requirement not found",
+        )
+
+    db.delete(db_requirement)
+    db.commit()
+
+    return Response(
+        status_code=status.HTTP_204_NO_CONTENT,
+    )
