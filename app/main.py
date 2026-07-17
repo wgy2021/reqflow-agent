@@ -6,56 +6,15 @@ from fastapi import (
     Response,
     status,
 )
-from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
 from app.database import Base, engine, get_db
 from app.models import Requirement
-
-
-class RequirementCreate(BaseModel):
-    title: str = Field(
-        min_length=1,
-        max_length=100,
-    )
-    content: str = Field(
-        min_length=1,
-        max_length=5000,
-    )
-    priority: int = Field(
-        ge=1,
-        le=3,
-    )
-
-
-class RequirementUpdate(BaseModel):
-    title: str | None = Field(
-        default=None,
-        min_length=1,
-        max_length=100,
-    )
-    content: str | None = Field(
-        default=None,
-        min_length=1,
-        max_length=5000,
-    )
-    priority: int | None = Field(
-        default=None,
-        ge=1,
-        le=3,
-    )
-
-
-class RequirementResponse(BaseModel):
-    id: int
-    title: str
-    content: str
-    priority: int
-
-    model_config = {
-        "from_attributes": True,
-    }
+from app.schemas import (
+    RequirementCreate,
+    RequirementResponse,
+    RequirementUpdate,
+)
 
 
 Base.metadata.create_all(bind=engine)
