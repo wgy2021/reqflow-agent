@@ -49,11 +49,22 @@ def list_requirements(
         ge=1,
         le=3,
     ),
+    limit: int = Query(
+        default=20,
+        ge=1,
+        le=100,
+    ),
+    offset: int = Query(
+        default=0,
+        ge=0,
+    ),
     db: Session = Depends(get_db),
 ) -> list[Requirement]:
     return requirement_service.list_requirements(
         db=db,
         priority=priority,
+        limit=limit,
+        offset=offset,
     )
 
 

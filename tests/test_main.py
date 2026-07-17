@@ -220,3 +220,54 @@ def test_list_requirements_with_invalid_priority() -> None:
     )
 
     assert response.status_code == 422
+
+def test_list_requirements_with_pagination() -> None:
+    for index in range(1, 4):
+        response = client.post(
+            "/requirements",
+            json={
+                "title": f"需求{index}",
+                "content": f"需求内容{index}",
+                "priority": 1,
+            },
+        )
+
+        assert response.status_code == 201
+
+    response = client.get(
+        "/requirements",
+        params={
+            "limit": 1,
+            "offset": 1,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "id": 2,
+            "title": "需求2",
+            "content": "需求内容2",
+            "priority": 1,
+        }
+    ]
+
+
+def test_list_requirements_with_invalid_pagination() -> None:
+    invalid_limit_response = client.get(
+        "/requirements",
+        params={
+            "limit": 0,
+        },
+    )
+
+    assert invalid_limit_response.status_code == 422
+
+    invalid_offset_response = client.get(
+        "/requirements",
+        params={
+            "offset": -1,
+        },
+    )
+
+    assert invalid_offset_response.status_code == 422

@@ -28,8 +28,15 @@ def create_requirement(
 def list_requirements(
     db: Session,
     priority: int | None = None,
+    limit: int = 20,
+    offset: int = 0,
 ) -> list[Requirement]:
-    statement = select(Requirement)
+    statement = (
+        select(Requirement)
+        .order_by(Requirement.id.asc())
+        .offset(offset)
+        .limit(limit)
+    )
 
     if priority is not None:
         statement = statement.where(
@@ -39,7 +46,6 @@ def list_requirements(
     return list(
         db.scalars(statement).all()
     )
-
 
 def get_requirement(
     db: Session,
