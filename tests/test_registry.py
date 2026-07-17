@@ -2,6 +2,7 @@ import pytest
 
 from app.agent import registry
 from app.agent.tools.completeness import check_completeness
+from app.agent.tools.ambiguity import check_ambiguity
 
 
 @pytest.fixture(autouse=True)
@@ -114,4 +115,30 @@ def test_completeness_check() -> None:
         "tool": "completeness_check",
         "passed": True,
         "missing_fields": [],
+    }
+
+def test_ambiguity_check_detects_ambiguous_terms() -> None:
+    result = check_ambiguity(
+        content="系统应尽快向用户返回友好的提示信息",
+    )
+
+    assert result == {
+        "tool": "ambiguity_check",
+        "passed": False,
+        "matched_terms": [
+            "尽快",
+            "友好",
+        ],
+    }
+
+
+def test_ambiguity_check_passes_clear_requirement() -> None:
+    result = check_ambiguity(
+        content="系统必须在2秒内返回错误码和错误信息",
+    )
+
+    assert result == {
+        "tool": "ambiguity_check",
+        "passed": True,
+        "matched_terms": [],
     }
