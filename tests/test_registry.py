@@ -3,6 +3,7 @@ import pytest
 from app.agent import registry
 from app.agent.tools.completeness import check_completeness
 from app.agent.tools.ambiguity import check_ambiguity
+from app.agent.tools.priority import suggest_priority
 
 
 @pytest.fixture(autouse=True)
@@ -141,4 +142,50 @@ def test_ambiguity_check_passes_clear_requirement() -> None:
         "tool": "ambiguity_check",
         "passed": True,
         "matched_terms": [],
+    }
+def test_priority_suggestion_returns_high_priority() -> None:
+    result = suggest_priority(
+        title="登录故障",
+        content="用户无法登录系统",
+    )
+
+    assert result == {
+        "tool": "priority_suggestion",
+        "suggested_priority": 1,
+        "matched_keywords": [
+            "故障",
+            "无法登录",
+        ],
+        "reason": "需求包含安全、故障或核心功能不可用相关关键词",
+    }
+
+
+def test_priority_suggestion_returns_medium_priority() -> None:
+    result = suggest_priority(
+        title="接口性能优化",
+        content="接口响应延迟较高",
+    )
+
+    assert result == {
+        "tool": "priority_suggestion",
+        "suggested_priority": 2,
+        "matched_keywords": [
+            "性能",
+            "延迟",
+        ],
+        "reason": "需求包含性能、异常或体验问题相关关键词",
+    }
+
+
+def test_priority_suggestion_returns_low_priority() -> None:
+    result = suggest_priority(
+        title="修改页面文案",
+        content="调整首页提示语",
+    )
+
+    assert result == {
+        "tool": "priority_suggestion",
+        "suggested_priority": 3,
+        "matched_keywords": [],
+        "reason": "未发现高风险或紧急问题关键词",
     }
