@@ -271,3 +271,52 @@ def test_list_requirements_with_invalid_pagination() -> None:
     )
 
     assert invalid_offset_response.status_code == 422
+
+def test_analyze_requirement_endpoint() -> None:
+    create_response = client.post(
+        "/requirements",
+        json={
+            "title": "登录故障",
+            "content": "用户无法登录系统",
+            "priority": 3,
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    requirement_id = create_response.json()["id"]
+
+    analyze_response = client.post(
+        f"/requirements/{requirement_id}/analyze"
+    )
+
+    assert analyze_response.status_code == 200
+
+    result = analyze_response.json()
+
+    assert result["passed"] is False
+    assert result["current_priority"] == 3
+    assert result["suggested_priority"] == 1
+    assert result["priority_consistent"] is False
+    assert (
+        "当前优先级为 3，建议优先级为 1"
+        in result["issues"]
+    )
+
+    assert result["tool_results"]["priority"][
+        "matched_keywords"
+    ] == [
+        "故障",
+        "无法登录",
+    ]
+
+
+def test_analyze_missing_requirement_returns_404() -> None:
+    response = client.post(
+        "/requirements/999/analyze"
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Requirement not found",
+    }
