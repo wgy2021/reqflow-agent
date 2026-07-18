@@ -112,3 +112,26 @@ def test_analyzer_rejects_unavailable_tool() -> None:
             priority=3,
             llm_client=planner,
         )
+def test_analyzer_uses_llm_factory_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    planner = StaticPlanner(
+        planned_tools=[
+            "completeness_check",
+        ]
+    )
+
+    monkeypatch.setattr(
+        "app.agent.analyzer.get_llm_client",
+        lambda: planner,
+    )
+
+    result = analyze_requirement(
+        title="修改页面文案",
+        content="将首页按钮文字修改为提交",
+        priority=3,
+    )
+
+    assert result["planned_tools"] == [
+        "completeness_check",
+    ]

@@ -1,7 +1,7 @@
 from typing import Any
 
 import app.agent.tools  # 触发工具注册
-from app.agent.llm import FakeLLMClient, LLMClient
+from app.agent.llm import LLMClient, get_llm_client
 from app.agent.registry import execute_tool, list_tools
 
 
@@ -20,7 +20,7 @@ def analyze_requirement(
 ) -> dict[str, Any]:
     """由 Planner 选择工具，再执行并汇总分析结果。"""
 
-    client = llm_client or FakeLLMClient()
+    client = llm_client or get_llm_client()
 
     available_tools = list_tools()
     available_tool_names = {
