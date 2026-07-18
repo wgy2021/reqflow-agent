@@ -22,26 +22,18 @@ class OpenAICompatibleLLMClient(LLMClient):
         model = model.strip()
 
         if not api_key:
-            raise ValueError(
-                "LLM API key is required"
-            )
+            raise ValueError("LLM API key is required")
 
         if not base_url:
-            raise ValueError(
-                "LLM base URL is required"
-            )
+            raise ValueError("LLM base URL is required")
 
         if not model:
-            raise ValueError(
-                "LLM model is required"
-            )
+            raise ValueError("LLM model is required")
 
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.timeout = timeout
-
-        # 测试时传入 MockTransport，避免真实网络请求。
         self.transport = transport
 
     def plan_tools(
@@ -58,22 +50,39 @@ class OpenAICompatibleLLMClient(LLMClient):
             available_tools=available_tools,
         )
 
-        with httpx.Client(
-            timeout=self.timeout,
-            transport=self.transport,
-        ) as client:
-            response = client.post(
-                f"{self.base_url}/chat/completions",
-                headers={
-                    "Authorization": (
-                        f"Bearer {self.api_key}"
-                    ),
-                    "Content-Type": "application/json",
-                },
-                json=request_payload,
-            )
+        try:
+            with httpx.Client(
+                timeout=self.timeout,
+                transport=self.transport,
+            ) as client:
+                response = client.post(
+                    f"{self.base_url}/chat/completions",
+                    headers={
+                        "Authorization": (
+                            f"Bearer {self.api_key}"
+                        ),
+                        "Content-Type": "application/json",
+                    },
+                    json=request_payload,
+                )
 
-        response.raise_for_status()
+                response.raise_for_status()
+
+        except httpx.TimeoutException as exc:
+            raise RuntimeError(
+                "LLM request timed out"
+            ) from exc
+
+        except httpx.HTTPStatusError as exc:
+            raise RuntimeError(
+                "LLM request failed with status "
+                f"{exc.response.status_code}"
+            ) from exc
+
+        except httpx.RequestError as exc:
+            raise RuntimeError(
+                "LLM request failed"
+            ) from exc
 
         return self._parse_planned_tools(
             response=response,
@@ -118,7 +127,29 @@ class OpenAICompatibleLLMClient(LLMClient):
         }
 
     @staticmethod
+    def _remove_markdown_code_fence(
+        content: str,
+    ) -> str:
+        """移除模型可能附加的 Markdown JSON 代码块。"""
+
+        stripped_content = content.strip()
+
+        if not stripped_content.startswith("```"):
+            return stripped_content
+
+        lines = stripped_content.splitlines()
+
+        if lines and lines[0].strip().startswith("```"):
+            lines = lines[1:]
+
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+
+        return "\n".join(lines).strip()
+
+    @classmethod
     def _parse_planned_tools(
+        cls,
         response: httpx.Response,
     ) -> list[str]:
         try:
@@ -128,9 +159,19 @@ class OpenAICompatibleLLMClient(LLMClient):
                 "choices"
             ][0]["message"]["content"]
 
-            parsed_content = json.loads(
-                message_content
+            if not isinstance(message_content, str):
+                raise TypeError
+
+            normalized_content = (
+                cls._remove_markdown_code_fence(
+                    message_content
+                )
             )
+
+            parsed_content = json.loads(
+                normalized_content
+            )
+
         except (
             ValueError,
             KeyError,
@@ -140,6 +181,11 @@ class OpenAICompatibleLLMClient(LLMClient):
             raise ValueError(
                 "Invalid LLM response structure or JSON"
             ) from exc
+
+        if not isinstance(parsed_content, dict):
+            raise ValueError(
+                "LLM response content must be an object"
+            )
 
         planned_tools = parsed_content.get(
             "planned_tools"
@@ -159,7 +205,6 @@ class OpenAICompatibleLLMClient(LLMClient):
                 "Every planned tool must be a non-empty string"
             )
 
-        # 去重，同时保留模型给出的原始顺序。
         return list(
             dict.fromkeys(planned_tools)
         )

@@ -178,3 +178,110 @@ def test_openai_compatible_client_requires_api_key() -> None:
             base_url="https://example.com/v1",
             model="test-model",
         )
+
+def test_openai_compatible_client_parses_json_code_fence() -> None:
+    def handle_request(
+        request: httpx.Request,
+    ) -> httpx.Response:
+        return httpx.Response(
+            status_code=200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                "```json\n"
+                                '{"planned_tools":['
+                                '"completeness_check",'
+                                '"ambiguity_check"'
+                                "]}\n"
+                                "```"
+                            )
+                        }
+                    }
+                ]
+            },
+        )
+
+    client = OpenAICompatibleLLMClient(
+        api_key="test-key",
+        base_url="https://example.com/v1",
+        model="test-model",
+        transport=httpx.MockTransport(
+            handle_request
+        ),
+    )
+
+    result = client.plan_tools(
+        title="优化提示信息",
+        content="系统应尽快返回提示信息",
+        priority=3,
+        available_tools=AVAILABLE_TOOLS,
+    )
+
+    assert result == [
+        "completeness_check",
+        "ambiguity_check",
+    ]
+
+
+def test_openai_compatible_client_handles_http_error() -> None:
+    def handle_request(
+        request: httpx.Request,
+    ) -> httpx.Response:
+        return httpx.Response(
+            status_code=401,
+            json={
+                "error": "Unauthorized",
+            },
+        )
+
+    client = OpenAICompatibleLLMClient(
+        api_key="invalid-key",
+        base_url="https://example.com/v1",
+        model="test-model",
+        transport=httpx.MockTransport(
+            handle_request
+        ),
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="LLM request failed with status 401",
+    ):
+        client.plan_tools(
+            title="测试需求",
+            content="测试内容",
+            priority=3,
+            available_tools=AVAILABLE_TOOLS,
+        )
+
+
+def test_openai_compatible_client_handles_network_error() -> None:
+    def handle_request(
+        request: httpx.Request,
+    ) -> httpx.Response:
+        raise httpx.ConnectError(
+            "Connection failed",
+            request=request,
+        )
+
+    client = OpenAICompatibleLLMClient(
+        api_key="test-key",
+        base_url="https://example.com/v1",
+        model="test-model",
+        transport=httpx.MockTransport(
+            handle_request
+        ),
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="LLM request failed",
+    ):
+        client.plan_tools(
+            title="测试需求",
+            content="测试内容",
+            priority=3,
+            available_tools=AVAILABLE_TOOLS,
+        )
