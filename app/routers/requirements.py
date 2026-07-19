@@ -130,6 +130,10 @@ def update_requirement(
 )
 def analyze_requirement_endpoint(
     requirement_id: int,
+    force_refresh: bool = Query(
+        default=False,
+        description="是否忽略缓存并重新执行分析",
+    ),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     db_requirement = requirement_service.get_requirement(
@@ -151,11 +155,14 @@ def analyze_requirement_endpoint(
         )
     )
 
-    cached_analysis = analysis_service.get_cached_analysis(
-        db=db,
-        requirement_id=requirement_id,
-        fingerprint=fingerprint,
-    )
+    cached_analysis = None
+
+    if not force_refresh:
+        cached_analysis = analysis_service.get_cached_analysis(
+            db=db,
+            requirement_id=requirement_id,
+            fingerprint=fingerprint,
+        )
 
     if cached_analysis is not None:
         return analysis_service.analysis_to_result(

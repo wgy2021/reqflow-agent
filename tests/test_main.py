@@ -457,3 +457,50 @@ def test_analyze_requirement_uses_cache_when_unchanged() -> None:
 
     # 第二次请求使用缓存，不新增历史记录。
     assert len(analysis_records) == 1
+
+def test_analyze_requirement_can_force_refresh() -> None:
+    requirement = create_sample_requirement()
+    requirement_id = requirement["id"]
+
+    first_response = client.post(
+        f"/requirements/{requirement_id}/analyze"
+    )
+
+    cached_response = client.post(
+        f"/requirements/{requirement_id}/analyze"
+    )
+
+    forced_response = client.post(
+        f"/requirements/{requirement_id}/analyze",
+        params={
+            "force_refresh": True,
+        },
+    )
+
+    cached_again_response = client.post(
+        f"/requirements/{requirement_id}/analyze"
+    )
+
+    assert first_response.status_code == 200
+    assert cached_response.status_code == 200
+    assert forced_response.status_code == 200
+    assert cached_again_response.status_code == 200
+
+    assert first_response.json()["cache_hit"] is False
+    assert cached_response.json()["cache_hit"] is True
+
+    # 强制刷新跳过缓存，重新执行分析。
+    assert forced_response.json()["cache_hit"] is False
+
+    # 强制刷新产生的新结果成为最新缓存。
+    assert cached_again_response.json()["cache_hit"] is True
+
+    with TestingSessionLocal() as db:
+        analysis_records = list(
+            db.scalars(
+                select(RequirementAnalysis)
+            ).all()
+        )
+
+    # 第一次分析和强制刷新各保存一条记录。
+    assert len(analysis_records) == 2
