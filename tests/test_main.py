@@ -367,13 +367,27 @@ def test_list_requirement_analysis_history() -> None:
     first_response = client.post(
         f"/requirements/{requirement_id}/analyze"
     )
+
+    update_response = client.patch(
+        f"/requirements/{requirement_id}",
+        json={
+            "content": (
+                "用户输入正确账号密码后，"
+                "系统必须在2秒内返回访问令牌"
+            ),
+        },
+    )
+
     second_response = client.post(
         f"/requirements/{requirement_id}/analyze"
     )
 
     assert first_response.status_code == 200
+    assert update_response.status_code == 200
     assert second_response.status_code == 200
 
+    assert first_response.json()["cache_hit"] is False
+    assert second_response.json()["cache_hit"] is False
     history_response = client.get(
         f"/requirements/{requirement_id}/analyses"
     )
@@ -404,3 +418,42 @@ def test_list_missing_requirement_analyses_returns_404() -> None:
     assert response.json() == {
         "detail": "Requirement not found",
     }
+
+def test_analyze_requirement_uses_cache_when_unchanged() -> None:
+    requirement = create_sample_requirement()
+    requirement_id = requirement["id"]
+
+    first_response = client.post(
+        f"/requirements/{requirement_id}/analyze"
+    )
+
+    second_response = client.post(
+        f"/requirements/{requirement_id}/analyze"
+    )
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+
+    first_result = first_response.json()
+    second_result = second_response.json()
+
+    assert first_result["cache_hit"] is False
+    assert second_result["cache_hit"] is True
+
+    assert second_result["final_report"] == (
+        first_result["final_report"]
+    )
+
+    assert second_result["planned_tools"] == (
+        first_result["planned_tools"]
+    )
+
+    with TestingSessionLocal() as db:
+        analysis_records = list(
+            db.scalars(
+                select(RequirementAnalysis)
+            ).all()
+        )
+
+    # 第二次请求使用缓存，不新增历史记录。
+    assert len(analysis_records) == 1

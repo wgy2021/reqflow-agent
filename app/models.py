@@ -111,3 +111,22 @@ class RequirementAnalysis(Base):
         nullable=False,
         server_default=func.now(),
     )
+
+class RequirementAnalysisCache(Base):
+    __tablename__ = "requirement_analysis_cache"
+
+    requirement_id: Mapped[int] = mapped_column(
+        ForeignKey("requirements.id"),
+        primary_key=True,
+    )
+
+    fingerprint: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        index=True,
+    )
+
+    analysis_id: Mapped[int] = mapped_column(
+        ForeignKey("requirement_analyses.id"),
+        nullable=False,
+    )

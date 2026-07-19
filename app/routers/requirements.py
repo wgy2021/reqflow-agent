@@ -143,16 +143,39 @@ def analyze_requirement_endpoint(
             detail="Requirement not found",
         )
 
+    fingerprint = (
+        analysis_service.build_requirement_fingerprint(
+            title=db_requirement.title,
+            content=db_requirement.content,
+            priority=db_requirement.priority,
+        )
+    )
+
+    cached_analysis = analysis_service.get_cached_analysis(
+        db=db,
+        requirement_id=requirement_id,
+        fingerprint=fingerprint,
+    )
+
+    if cached_analysis is not None:
+        return analysis_service.analysis_to_result(
+            analysis=cached_analysis,
+            cache_hit=True,
+        )
+
     analysis_result = analyze_requirement(
         title=db_requirement.title,
         content=db_requirement.content,
         priority=db_requirement.priority,
     )
 
+    analysis_result["cache_hit"] = False
+
     analysis_service.create_analysis(
         db=db,
         requirement_id=requirement_id,
         analysis_result=analysis_result,
+        fingerprint=fingerprint,
     )
 
     return analysis_result
