@@ -1,3 +1,5 @@
+from typing import Any
+
 from app.agent.llm.base import LLMClient
 
 
@@ -72,3 +74,41 @@ class FakeLLMClient(LLMClient):
             planned_tools.append("priority_suggestion")
 
         return planned_tools
+    def generate_report(
+        self,
+        title: str,
+        content: str,
+        priority: int | None,
+        planned_tools: list[str],
+        tool_results: dict[str, dict[str, Any]],
+        issues: list[str],
+        passed: bool,
+    ) -> str:
+        """使用固定规则生成稳定、可测试的分析报告。"""
+
+        status_text = "通过" if passed else "未通过"
+
+        tool_text = (
+            "、".join(planned_tools)
+            if planned_tools
+            else "无"
+        )
+
+        issue_text = (
+            "；".join(issues)
+            if issues
+            else "未发现明显问题"
+        )
+
+        priority_text = (
+            str(priority)
+            if priority is not None
+            else "未设置"
+        )
+
+        return (
+            f"需求《{title}》分析{status_text}。"
+            f"当前优先级：{priority_text}。"
+            f"已执行工具：{tool_text}。"
+            f"分析结论：{issue_text}。"
+        )

@@ -149,6 +149,16 @@ def analyze_requirement(
     if priority_consistent is False:
         passed = False
 
+    final_report = client.generate_report(
+        title=title,
+        content=content,
+        priority=priority,
+        planned_tools=planned_tools,
+        tool_results=tool_results,
+        issues=issues,
+        passed=passed,
+    )
+
     return {
         "passed": passed,
         "planned_tools": planned_tools,
@@ -157,4 +167,6 @@ def analyze_requirement(
         "priority_consistent": priority_consistent,
         "issues": issues,
         "tool_results": tool_results,
+        "final_report": final_report,
     }
+

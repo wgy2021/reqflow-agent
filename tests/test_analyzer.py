@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 
 from app.agent.analyzer import analyze_requirement
@@ -64,6 +66,18 @@ class StaticPlanner(LLMClient):
         available_tools: list[dict[str, str]],
     ) -> list[str]:
         return self.planned_tools
+
+    def generate_report(
+        self,
+        title: str,
+        content: str,
+        priority: int | None,
+        planned_tools: list[str],
+        tool_results: dict[str, dict[str, Any]],
+        issues: list[str],
+        passed: bool,
+    ) -> str:
+        return "固定分析报告"
 
 
 def test_analyzer_executes_only_planned_tools() -> None:
@@ -135,3 +149,17 @@ def test_analyzer_uses_llm_factory_by_default(
     assert result["planned_tools"] == [
         "completeness_check",
     ]
+
+def test_analyzer_returns_final_report() -> None:
+    result = analyze_requirement(
+        title="修改页面文案",
+        content="将首页按钮文字修改为提交",
+        priority=3,
+    )
+
+    assert result["final_report"] == (
+        "需求《修改页面文案》分析通过。"
+        "当前优先级：3。"
+        "已执行工具：completeness_check。"
+        "分析结论：未发现明显问题。"
+    )

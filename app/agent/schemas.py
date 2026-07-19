@@ -41,3 +41,4 @@ class RequirementAnalysisResponse(BaseModel):
     priority_consistent: bool | None
     issues: list[str]
     tool_results: RequirementToolResults
+    final_report: str

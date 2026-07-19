@@ -74,3 +74,37 @@ def test_fake_llm_only_selects_available_tools() -> None:
         "completeness_check",
         "ambiguity_check",
     ]
+
+def test_fake_llm_generates_report() -> None:
+    client = FakeLLMClient()
+
+    report = client.generate_report(
+        title="登录故障",
+        content="系统应尽快解决用户无法登录的问题",
+        priority=3,
+        planned_tools=[
+            "completeness_check",
+            "ambiguity_check",
+        ],
+        tool_results={
+            "completeness": {
+                "passed": True,
+                "missing_fields": [],
+            },
+            "ambiguity": {
+                "passed": False,
+                "matched_terms": ["尽快"],
+            },
+        },
+        issues=[
+            "包含模糊表达：尽快",
+        ],
+        passed=False,
+    )
+
+    assert report == (
+        "需求《登录故障》分析未通过。"
+        "当前优先级：3。"
+        "已执行工具：completeness_check、ambiguity_check。"
+        "分析结论：包含模糊表达：尽快。"
+    )

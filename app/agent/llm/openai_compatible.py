@@ -88,6 +88,93 @@ class OpenAICompatibleLLMClient(LLMClient):
             response=response,
         )
 
+    def generate_report(
+        self,
+        title: str,
+        content: str,
+        priority: int | None,
+        planned_tools: list[str],
+        tool_results: dict[str, dict[str, Any]],
+        issues: list[str],
+        passed: bool,
+    ) -> str:
+        """调用大模型，根据工具执行结果生成自然语言报告。"""
+
+        analysis_data = {
+            "requirement": {
+                "title": title,
+                "content": content,
+                "priority": priority,
+            },
+            "planned_tools": planned_tools,
+            "tool_results": tool_results,
+            "issues": issues,
+            "passed": passed,
+        }
+
+        request_payload = {
+            "model": self.model,
+            "temperature": 0,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "你是专业的软件需求分析师。"
+                        "请根据需求内容和工具执行结果，"
+                        "生成一段简洁、专业、便于产品经理阅读的中文报告。"
+                        "报告应说明需求是否通过检查、存在的问题以及修改建议。"
+                        "不要返回 JSON，不要使用 Markdown 代码块，"
+                        "只返回报告正文。"
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        analysis_data,
+                        ensure_ascii=False,
+                    ),
+                },
+            ],
+        }
+
+        try:
+            with httpx.Client(
+                timeout=self.timeout,
+                transport=self.transport,
+            ) as client:
+                response = client.post(
+                    f"{self.base_url}/chat/completions",
+                    headers={
+                        "Authorization": (
+                            f"Bearer {self.api_key}"
+                        ),
+                        "Content-Type": "application/json",
+                    },
+                    json=request_payload,
+                )
+
+                response.raise_for_status()
+
+        except httpx.TimeoutException as exc:
+            raise RuntimeError(
+                "LLM request timed out"
+            ) from exc
+
+        except httpx.HTTPStatusError as exc:
+            raise RuntimeError(
+                "LLM request failed with status "
+                f"{exc.response.status_code}"
+            ) from exc
+
+        except httpx.RequestError as exc:
+            raise RuntimeError(
+                "LLM request failed"
+            ) from exc
+
+        return self._parse_report(
+            response=response,
+        )
+
     def _build_request_payload(
         self,
         title: str,
@@ -208,3 +295,39 @@ class OpenAICompatibleLLMClient(LLMClient):
         return list(
             dict.fromkeys(planned_tools)
         )
+    @staticmethod
+    def _parse_report(
+        response: httpx.Response,
+    ) -> str:
+        """读取并校验大模型返回的报告正文。"""
+
+        try:
+            response_data = response.json()
+
+            report = response_data[
+                "choices"
+            ][0]["message"]["content"]
+
+        except (
+            ValueError,
+            KeyError,
+            IndexError,
+            TypeError,
+        ) as exc:
+            raise ValueError(
+                "Invalid LLM report response structure"
+            ) from exc
+
+        if not isinstance(report, str):
+            raise ValueError(
+                "LLM report must be a string"
+            )
+
+        report = report.strip()
+
+        if not report:
+            raise ValueError(
+                "LLM report must not be empty"
+            )
+
+        return report

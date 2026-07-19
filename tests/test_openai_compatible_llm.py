@@ -285,3 +285,84 @@ def test_openai_compatible_client_handles_network_error() -> None:
             priority=3,
             available_tools=AVAILABLE_TOOLS,
         )
+
+def test_openai_compatible_client_generates_report() -> None:
+    def handle_request(
+        request: httpx.Request,
+    ) -> httpx.Response:
+        assert str(request.url) == (
+            "https://example.com/v1/chat/completions"
+        )
+
+        request_data = json.loads(
+            request.content
+        )
+
+        assert request_data["model"] == "test-model"
+        assert request_data["temperature"] == 0
+
+        user_content = json.loads(
+            request_data["messages"][1]["content"]
+        )
+
+        assert user_content["requirement"]["title"] == (
+            "登录故障"
+        )
+
+        assert user_content["passed"] is False
+
+        return httpx.Response(
+            status_code=200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                "该需求未通过检查。"
+                                "需求中包含“尽快”等模糊表达，"
+                                "建议补充明确的处理时限。"
+                            )
+                        }
+                    }
+                ]
+            },
+        )
+
+    client = OpenAICompatibleLLMClient(
+        api_key="test-key",
+        base_url="https://example.com/v1",
+        model="test-model",
+        transport=httpx.MockTransport(
+            handle_request
+        ),
+    )
+
+    report = client.generate_report(
+        title="登录故障",
+        content="系统应尽快解决用户无法登录的问题",
+        priority=3,
+        planned_tools=[
+            "completeness_check",
+            "ambiguity_check",
+        ],
+        tool_results={
+            "completeness": {
+                "passed": True,
+                "missing_fields": [],
+            },
+            "ambiguity": {
+                "passed": False,
+                "matched_terms": ["尽快"],
+            },
+        },
+        issues=[
+            "包含模糊表达：尽快",
+        ],
+        passed=False,
+    )
+
+    assert report == (
+        "该需求未通过检查。"
+        "需求中包含“尽快”等模糊表达，"
+        "建议补充明确的处理时限。"
+    )
