@@ -1,7 +1,11 @@
 from typing import Any
 
 import app.agent.tools  # 触发工具注册
-from app.agent.llm import LLMClient, get_llm_client
+from app.agent.llm import (
+    FakeLLMClient,
+    LLMClient,
+    get_llm_client,
+)
 from app.agent.registry import execute_tool, list_tools
 
 
@@ -28,12 +32,29 @@ def analyze_requirement(
         for tool in available_tools
     }
 
-    planned_tools = client.plan_tools(
-        title=title,
-        content=content,
-        priority=priority,
-        available_tools=available_tools,
-    )
+    llm_fallback_used = False
+    llm_error: str | None = None
+
+    try:
+        planned_tools = client.plan_tools(
+            title=title,
+            content=content,
+            priority=priority,
+            available_tools=available_tools,
+        )
+
+    except (RuntimeError, ValueError) as exc:
+        llm_fallback_used = True
+        llm_error = str(exc)
+
+        client = FakeLLMClient()
+
+        planned_tools = client.plan_tools(
+            title=title,
+            content=content,
+            priority=priority,
+            available_tools=available_tools,
+        )
 
     # 去除重复工具，同时保留原有顺序。
     planned_tools = list(
@@ -149,15 +170,40 @@ def analyze_requirement(
     if priority_consistent is False:
         passed = False
 
-    final_report = client.generate_report(
-        title=title,
-        content=content,
-        priority=priority,
-        planned_tools=planned_tools,
-        tool_results=tool_results,
-        issues=issues,
-        passed=passed,
-    )
+    try:
+        final_report = client.generate_report(
+            title=title,
+            content=content,
+            priority=priority,
+            planned_tools=planned_tools,
+            tool_results=tool_results,
+            issues=issues,
+            passed=passed,
+        )
+
+    except (
+            RuntimeError,
+            ValueError,
+            NotImplementedError,
+    ) as exc:
+        llm_fallback_used = True
+
+        if llm_error is None:
+            llm_error = str(exc)
+        else:
+            llm_error = f"{llm_error}; {exc}"
+
+        fallback_client = FakeLLMClient()
+
+        final_report = fallback_client.generate_report(
+            title=title,
+            content=content,
+            priority=priority,
+            planned_tools=planned_tools,
+            tool_results=tool_results,
+            issues=issues,
+            passed=passed,
+        )
 
     return {
         "passed": passed,
@@ -168,5 +214,7 @@ def analyze_requirement(
         "issues": issues,
         "tool_results": tool_results,
         "final_report": final_report,
+        "llm_fallback_used": llm_fallback_used,
+        "llm_error": llm_error,
     }
 

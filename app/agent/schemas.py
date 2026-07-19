@@ -42,3 +42,5 @@ class RequirementAnalysisResponse(BaseModel):
     issues: list[str]
     tool_results: RequirementToolResults
     final_report: str
+    llm_fallback_used: bool
+    llm_error: str | None

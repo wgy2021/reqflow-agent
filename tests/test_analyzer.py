@@ -163,3 +163,36 @@ def test_analyzer_returns_final_report() -> None:
         "已执行工具：completeness_check。"
         "分析结论：未发现明显问题。"
     )
+
+class FailingLLMClient(LLMClient):
+    def plan_tools(
+        self,
+        title: str,
+        content: str,
+        priority: int | None,
+        available_tools: list[dict[str, str]],
+    ) -> list[str]:
+        raise RuntimeError("LLM request timed out")
+
+
+def test_analyzer_falls_back_when_planner_fails() -> None:
+    result = analyze_requirement(
+        title="修改页面文案",
+        content="将首页按钮文字修改为提交",
+        priority=3,
+        llm_client=FailingLLMClient(),
+    )
+
+    assert result["llm_fallback_used"] is True
+    assert result["llm_error"] == "LLM request timed out"
+
+    assert result["planned_tools"] == [
+        "completeness_check",
+    ]
+
+    assert result["final_report"] == (
+        "需求《修改页面文案》分析通过。"
+        "当前优先级：3。"
+        "已执行工具：completeness_check。"
+        "分析结论：未发现明显问题。"
+    )
