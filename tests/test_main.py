@@ -1,11 +1,12 @@
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.main import app
+from app.models import RequirementAnalysis
 
 
 TEST_DATABASE_URL = "sqlite://"
@@ -314,6 +315,89 @@ def test_analyze_requirement_endpoint() -> None:
 def test_analyze_missing_requirement_returns_404() -> None:
     response = client.post(
         "/requirements/999/analyze"
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Requirement not found",
+    }
+
+def test_analyze_requirement_is_persisted() -> None:
+    requirement = create_sample_requirement()
+    requirement_id = requirement["id"]
+
+    analyze_response = client.post(
+        f"/requirements/{requirement_id}/analyze"
+    )
+
+    assert analyze_response.status_code == 200
+
+    response_data = analyze_response.json()
+
+    with TestingSessionLocal() as db:
+        analysis_records = list(
+            db.scalars(
+                select(RequirementAnalysis)
+            ).all()
+        )
+
+    assert len(analysis_records) == 1
+
+    saved_analysis = analysis_records[0]
+
+    assert saved_analysis.requirement_id == requirement_id
+    assert saved_analysis.passed == response_data["passed"]
+
+    assert saved_analysis.planned_tools == (
+        response_data["planned_tools"]
+    )
+
+    assert saved_analysis.final_report == (
+        response_data["final_report"]
+    )
+
+    assert saved_analysis.llm_fallback_used == (
+        response_data["llm_fallback_used"]
+    )
+
+def test_list_requirement_analysis_history() -> None:
+    requirement = create_sample_requirement()
+    requirement_id = requirement["id"]
+
+    first_response = client.post(
+        f"/requirements/{requirement_id}/analyze"
+    )
+    second_response = client.post(
+        f"/requirements/{requirement_id}/analyze"
+    )
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+
+    history_response = client.get(
+        f"/requirements/{requirement_id}/analyses"
+    )
+
+    assert history_response.status_code == 200
+
+    records = history_response.json()
+
+    assert len(records) == 2
+
+    assert records[0]["id"] == 2
+    assert records[1]["id"] == 1
+
+    assert records[0]["requirement_id"] == (
+        requirement_id
+    )
+
+    assert records[0]["final_report"]
+    assert records[0]["created_at"]
+
+
+def test_list_missing_requirement_analyses_returns_404() -> None:
+    response = client.get(
+        "/requirements/999/analyses"
     )
 
     assert response.status_code == 404

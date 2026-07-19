@@ -1,4 +1,16 @@
-from sqlalchemy import Integer, String, Text
+from datetime import datetime
+from typing import Any
+
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    JSON,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -26,4 +38,76 @@ class Requirement(Base):
     priority: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
+    )
+
+class RequirementAnalysis(Base):
+    __tablename__ = "requirement_analyses"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    requirement_id: Mapped[int] = mapped_column(
+        ForeignKey("requirements.id"),
+        nullable=False,
+        index=True,
+    )
+
+    passed: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+    )
+
+    planned_tools: Mapped[list[str]] = mapped_column(
+        JSON,
+        nullable=False,
+    )
+
+    current_priority: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    suggested_priority: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    priority_consistent: Mapped[bool | None] = mapped_column(
+        Boolean,
+        nullable=True,
+    )
+
+    issues: Mapped[list[str]] = mapped_column(
+        JSON,
+        nullable=False,
+    )
+
+    tool_results: Mapped[dict[str, Any]] = mapped_column(
+        JSON,
+        nullable=False,
+    )
+
+    final_report: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    llm_fallback_used: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+    llm_error: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
     )

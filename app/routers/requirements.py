@@ -16,10 +16,14 @@ from app.schemas import (
     RequirementUpdate,
 )
 from app.services import requirements as requirement_service
+from app.services import analyses as analysis_service
 from typing import Any
 
 from app.agent.analyzer import analyze_requirement
-from app.agent.schemas import RequirementAnalysisResponse
+from app.agent.schemas import (
+    RequirementAnalysisHistoryResponse,
+    RequirementAnalysisResponse,
+)
 
 
 router = APIRouter(
@@ -139,10 +143,44 @@ def analyze_requirement_endpoint(
             detail="Requirement not found",
         )
 
-    return analyze_requirement(
+    analysis_result = analyze_requirement(
         title=db_requirement.title,
         content=db_requirement.content,
         priority=db_requirement.priority,
+    )
+
+    analysis_service.create_analysis(
+        db=db,
+        requirement_id=requirement_id,
+        analysis_result=analysis_result,
+    )
+
+    return analysis_result
+
+@router.get(
+    "/{requirement_id}/analyses",
+    response_model=list[
+        RequirementAnalysisHistoryResponse
+    ],
+)
+def list_requirement_analyses(
+    requirement_id: int,
+    db: Session = Depends(get_db),
+):
+    db_requirement = requirement_service.get_requirement(
+        db=db,
+        requirement_id=requirement_id,
+    )
+
+    if db_requirement is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Requirement not found",
+        )
+
+    return analysis_service.list_analyses(
+        db=db,
+        requirement_id=requirement_id,
     )
 
 @router.delete(

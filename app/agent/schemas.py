@@ -1,5 +1,6 @@
-from pydantic import BaseModel, Field
+from datetime import datetime
 
+from pydantic import BaseModel, ConfigDict, Field
 
 class CompletenessToolResult(BaseModel):
     tool: str
@@ -44,3 +45,14 @@ class RequirementAnalysisResponse(BaseModel):
     final_report: str
     llm_fallback_used: bool
     llm_error: str | None
+
+class RequirementAnalysisHistoryResponse(
+    RequirementAnalysisResponse
+):
+    model_config = ConfigDict(
+        from_attributes=True,
+    )
+
+    id: int
+    requirement_id: int
+    created_at: datetime
