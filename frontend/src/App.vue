@@ -12,6 +12,8 @@ const activeMenu = ref('requirements')
 const createDialogVisible = ref(false)
 const createSubmitting = ref(false)
 const createFormRef = ref()
+const detailDrawerVisible = ref(false)
+const selectedRequirement = ref(null)
 
 const createForm = reactive({
   title: '',
@@ -139,6 +141,11 @@ function resetCreateForm() {
 function openCreateDialog() {
   resetCreateForm()
   createDialogVisible.value = true
+}
+
+function openDetailDrawer(requirement) {
+  selectedRequirement.value = requirement
+  detailDrawerVisible.value = true
 }
 
 async function submitRequirement() {
@@ -456,11 +463,11 @@ onMounted(loadData)
                 width="180"
                 fixed="right"
               >
-                <template #default>
+                <template #default="{ row }">
                   <el-button
                     link
                     type="primary"
-                    @click="showPendingMessage('需求详情')"
+                    @click="openDetailDrawer(row)"
                   >
                     <el-icon><View /></el-icon>
                     查看
@@ -645,6 +652,77 @@ onMounted(loadData)
         </el-button>
       </template>
     </el-dialog>
+
+    <el-drawer
+      v-model="detailDrawerVisible"
+      title="需求详情"
+      size="520px"
+      destroy-on-close
+    >
+      <div
+        v-if="selectedRequirement"
+        class="detail-drawer"
+      >
+        <div class="detail-heading">
+          <div class="detail-avatar">
+            {{ selectedRequirement.title.slice(0, 1) }}
+          </div>
+
+          <div>
+            <h3>{{ selectedRequirement.title }}</h3>
+
+            <span class="detail-code">
+              REQ-{{ String(selectedRequirement.id).padStart(4, '0') }}
+            </span>
+          </div>
+        </div>
+
+        <el-divider />
+
+        <section class="detail-section">
+          <span class="detail-label">需求优先级</span>
+
+          <el-tag
+            :type="getPriorityType(selectedRequirement.priority)"
+            effect="light"
+            round
+          >
+            {{ getPriorityLabel(selectedRequirement.priority) }}
+          </el-tag>
+        </section>
+
+        <section class="detail-section detail-content-section">
+          <span class="detail-label">需求内容</span>
+
+          <div class="detail-content">
+            {{ selectedRequirement.content }}
+          </div>
+        </section>
+
+        <section class="detail-section">
+          <span class="detail-label">当前分析状态</span>
+
+          <span class="analysis-status">
+            <span></span>
+            待分析
+          </span>
+        </section>
+
+        <div class="detail-actions">
+          <el-button @click="detailDrawerVisible = false">
+            关闭
+          </el-button>
+
+          <el-button
+            type="primary"
+            @click="showPendingMessage('Agent 分析')"
+          >
+            <el-icon><MagicStick /></el-icon>
+            启动 Agent 分析
+          </el-button>
+        </div>
+      </div>
+    </el-drawer>
   </el-container>
 </template>
 
@@ -1222,6 +1300,90 @@ onMounted(loadData)
 :deep(.el-form-item__label) {
   color: #344054;
   font-weight: 500;
+}
+
+.detail-drawer {
+  display: flex;
+  min-height: calc(100vh - 110px);
+  flex-direction: column;
+}
+
+.detail-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.detail-avatar {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: #eef2ff;
+  color: #4f46e5;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.detail-heading h3 {
+  margin: 0 0 7px;
+  color: #101828;
+  font-size: 19px;
+}
+
+.detail-code {
+  color: #98a2b3;
+  font-family: Consolas, monospace;
+  font-size: 12px;
+}
+
+.detail-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 17px 0;
+  border-bottom: 1px solid #eaecf0;
+}
+
+.detail-content-section {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.detail-label {
+  color: #667085;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.detail-content {
+  width: 100%;
+  padding: 16px;
+  border: 1px solid #eaecf0;
+  border-radius: 10px;
+  background: #f9fafb;
+  color: #344054;
+  font-size: 14px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.detail-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 24px;
+}
+
+:deep(.el-drawer__title) {
+  color: #101828;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 @media (max-width: 1250px) {
