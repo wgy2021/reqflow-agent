@@ -1,0 +1,23 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: reqflow-agent-container
+
+    ports:
+      - "8001:8000"
+
+    environment:
+      LLM_PROVIDER: fake
+      DATABASE_URL: sqlite:////data/reqflow.db
+
+    volumes:
+      - reqflow_data:/data
+
+    restart: unless-stopped
+
+volumes:
+  reqflow_data:
+    name: reqflow_data
