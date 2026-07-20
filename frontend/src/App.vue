@@ -2,6 +2,16 @@
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
+import {
+  analyzeRequirement as requestRequirementAnalysis,
+  createRequirement as requestCreateRequirement,
+  listRequirementAnalyses,
+  listRequirements,
+  removeRequirement,
+  updateRequirement as requestUpdateRequirement,
+} from './api/requirements'
+import { getSystemHealth } from './api/system'
+
 const requirements = ref([])
 const loading = ref(false)
 const backendHealthy = ref(false)
@@ -177,15 +187,13 @@ async function loadRequirementHistory(requirementId) {
   historyLoading.value = true
 
   try {
-    const response = await fetch(
-      `/api/requirements/${requirementId}/analyses?limit=100&offset=0`,
+    historyRecords.value = await listRequirementAnalyses(
+      requirementId,
+      {
+        limit: 100,
+        offset: 0,
+      },
     )
-
-    if (!response.ok) {
-      throw new Error(`加载分析历史失败：HTTP ${response.status}`)
-    }
-
-    historyRecords.value = await response.json()
   } catch (error) {
     historyRecords.value = []
     ElMessage.error('分析历史加载失败，请检查后端服务。')
@@ -252,15 +260,13 @@ async function loadLatestAnalysisStatuses(requirementItems) {
   const historyEntries = await Promise.all(
     requirementItems.map(async (requirement) => {
       try {
-        const response = await fetch(
-          `/api/requirements/${requirement.id}/analyses?limit=1&offset=0`,
+        const history = await listRequirementAnalyses(
+          requirement.id,
+          {
+            limit: 1,
+            offset: 0,
+          },
         )
-
-        if (!response.ok) {
-          return [requirement.id, null]
-        }
-
-        const history = await response.json()
 
         return [requirement.id, history[0] ?? null]
       } catch (error) {
@@ -283,17 +289,13 @@ async function loadData() {
   loading.value = true
 
   try {
-    const [healthResponse, requirementsResponse] = await Promise.all([
-      fetch('/api/health'),
-      fetch('/api/requirements?limit=100&offset=0'),
+    const [healthData, requirementsData] = await Promise.all([
+      getSystemHealth(),
+      listRequirements({
+        limit: 100,
+        offset: 0,
+      }),
     ])
-
-    if (!healthResponse.ok || !requirementsResponse.ok) {
-      throw new Error('后端接口返回异常')
-    }
-
-    const healthData = await healthResponse.json()
-    const requirementsData = await requirementsResponse.json()
 
     backendHealthy.value = healthData.status === 'ok'
     requirements.value = requirementsData
@@ -360,26 +362,14 @@ async function submitRequirementEdit() {
   editSubmitting.value = true
 
   try {
-    const response = await fetch(
-      `/api/requirements/${editForm.id}`,
+    const updatedRequirement = await requestUpdateRequirement(
+      editForm.id,
       {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          title: editForm.title.trim(),
-          content: editForm.content.trim(),
-          priority: editForm.priority,
-        }),
+        title: editForm.title.trim(),
+        content: editForm.content.trim(),
+        priority: editForm.priority,
       },
     )
-
-    if (!response.ok) {
-      throw new Error(`更新需求失败：HTTP ${response.status}`)
-    }
-
-    const updatedRequirement = await response.json()
 
     requirements.value = requirements.value.map((item) =>
       item.id === updatedRequirement.id
@@ -428,16 +418,7 @@ async function deleteRequirement(requirement) {
   deletingRequirementId.value = requirement.id
 
   try {
-    const response = await fetch(
-      `/api/requirements/${requirement.id}`,
-      {
-        method: 'DELETE',
-      },
-    )
-
-    if (!response.ok) {
-      throw new Error(`删除需求失败：HTTP ${response.status}`)
-    }
+    await removeRequirement(requirement.id)
 
     requirements.value = requirements.value.filter(
       (item) => item.id !== requirement.id,
@@ -486,18 +467,9 @@ async function runAnalysis(requirement) {
   analyzingRequirementId.value = requirement.id
 
   try {
-    const response = await fetch(
-      `/api/requirements/${requirement.id}/analyze`,
-      {
-        method: 'POST',
-      },
+    const result = await requestRequirementAnalysis(
+      requirement.id,
     )
-
-    if (!response.ok) {
-      throw new Error(`Agent 分析失败：HTTP ${response.status}`)
-    }
-
-    const result = await response.json()
 
     analysisResult.value = result
     analysisResultsByRequirement.value = {
@@ -537,21 +509,11 @@ async function submitRequirement() {
   createSubmitting.value = true
 
   try {
-    const response = await fetch('/api/requirements', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        title: createForm.title.trim(),
-        content: createForm.content.trim(),
-        priority: createForm.priority,
-      }),
+    await requestCreateRequirement({
+      title: createForm.title.trim(),
+      content: createForm.content.trim(),
+      priority: createForm.priority,
     })
-
-    if (!response.ok) {
-      throw new Error(`创建需求失败：HTTP ${response.status}`)
-    }
 
     createDialogVisible.value = false
 
