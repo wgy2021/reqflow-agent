@@ -101,6 +101,63 @@ sequenceDiagram
     end
 ```
 
+## 项目结构
+
+```text
+reqflow-agent/
+├── app/
+│   ├── agent/
+│   │   ├── llm/
+│   │   │   ├── base.py
+│   │   │   ├── fake.py
+│   │   │   ├── factory.py
+│   │   │   └── openai_compatible.py
+│   │   ├── tools/
+│   │   │   ├── ambiguity.py
+│   │   │   ├── completeness.py
+│   │   │   └── priority.py
+│   │   ├── analyzer.py
+│   │   ├── registry.py
+│   │   └── schemas.py
+│   ├── routers/
+│   │   └── requirements.py
+│   ├── services/
+│   │   ├── analyses.py
+│   │   └── requirements.py
+│   ├── config.py
+│   ├── database.py
+│   ├── main.py
+│   ├── models.py
+│   └── schemas.py
+├── tests/
+│   ├── conftest.py
+│   ├── test_analyzer.py
+│   ├── test_fake_llm.py
+│   ├── test_llm_factory.py
+│   ├── test_main.py
+│   ├── test_openai_compatible_llm.py
+│   └── test_registry.py
+├── .github/
+│   └── workflows/
+│       └── tests.yml
+├── .env.example
+├── .gitignore
+├── README.md
+└── requirements.txt
+```
+
+### 目录职责
+
+- `app/routers`：定义 FastAPI 接口并处理 HTTP 请求。
+- `app/services`：封装需求管理、分析历史和缓存相关业务逻辑。
+- `app/agent/analyzer.py`：组织工具规划、工具执行和报告生成流程。
+- `app/agent/registry.py`：注册并管理可以被 Agent 调用的工具。
+- `app/agent/tools`：实现完整性检查、歧义检测和优先级建议。
+- `app/agent/llm`：封装 FakeLLM 和 OpenAI 兼容模型客户端。
+- `app/models.py`：定义 SQLAlchemy 数据库模型。
+- `tests`：存放单元测试和接口测试。
+- `.github/workflows/tests.yml`：配置 GitHub Actions 自动测试。
+
 
 ## 环境配置
 
