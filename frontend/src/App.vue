@@ -22,6 +22,11 @@ const analysisResult = ref(null)
 const analysisRequirement = ref(null)
 const analyzingRequirementId = ref(null)
 const analysisResultsByRequirement = ref({})
+const analysisViewMode = ref('live')
+
+const historyLoading = ref(false)
+const historyRecords = ref([])
+const selectedHistoryRequirementId = ref(null)
 
 const createForm = reactive({
   title: '',
@@ -86,6 +91,24 @@ const highPriorityCount = computed(() => {
   return requirements.value.filter((item) => item.priority === 1).length
 })
 
+const currentPageTitle = computed(() => {
+  return activeMenu.value === 'history'
+    ? '分析历史'
+    : '需求管理'
+})
+
+const currentBreadcrumb = computed(() => {
+  return activeMenu.value === 'history'
+    ? '工作空间 / 分析历史'
+    : '工作空间 / 需求管理'
+})
+
+const selectedHistoryRequirement = computed(() => {
+  return requirements.value.find(
+    (item) => item.id === selectedHistoryRequirementId.value,
+  )
+})
+
 function getPriorityLabel(priority) {
   const labels = {
     1: '高优先级',
@@ -122,6 +145,94 @@ function formatList(items) {
   }
 
   return items.join('、')
+}
+
+function formatDateTime(value) {
+  if (!value) {
+    return '--'
+  }
+
+  return value.replace('T', ' ').slice(0, 19)
+}
+
+async function loadRequirementHistory(requirementId) {
+  if (!requirementId) {
+    historyRecords.value = []
+    return
+  }
+
+  historyLoading.value = true
+
+  try {
+    const response = await fetch(
+      `/api/requirements/${requirementId}/analyses?limit=100&offset=0`,
+    )
+
+    if (!response.ok) {
+      throw new Error(`加载分析历史失败：HTTP ${response.status}`)
+    }
+
+    historyRecords.value = await response.json()
+  } catch (error) {
+    historyRecords.value = []
+    ElMessage.error('分析历史加载失败，请检查后端服务。')
+    console.error(error)
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+async function handleMenuSelect(index) {
+  if (index === 'requirements') {
+    activeMenu.value = 'requirements'
+    return
+  }
+
+  if (index === 'history') {
+    activeMenu.value = 'history'
+
+    const firstAnalyzedRequirement = requirements.value.find(
+      (item) => analysisResultsByRequirement.value[item.id],
+    )
+
+    const fallbackRequirement = requirements.value[0]
+
+    selectedHistoryRequirementId.value =
+      selectedHistoryRequirementId.value ??
+      firstAnalyzedRequirement?.id ??
+      fallbackRequirement?.id ??
+      null
+
+    await loadRequirementHistory(
+      selectedHistoryRequirementId.value,
+    )
+
+    return
+  }
+
+  ElMessage.info('该页面将在后续版本接入。')
+}
+
+async function handleHistoryRequirementChange(requirementId) {
+  await loadRequirementHistory(requirementId)
+}
+
+function openHistoryRecord(record) {
+  const requirement = requirements.value.find(
+    (item) => item.id === record.requirement_id,
+  )
+
+  analysisRequirement.value =
+    requirement ??
+    {
+      id: record.requirement_id,
+      title: '历史需求',
+    }
+
+  analysisResult.value = record
+  analysisError.value = ''
+  analysisViewMode.value = 'history'
+  analysisDialogVisible.value = true
 }
 
 async function loadLatestAnalysisStatuses(requirementItems) {
@@ -209,6 +320,7 @@ function openDetailDrawer(requirement) {
 
 async function runAnalysis(requirement) {
   analysisRequirement.value = requirement
+  analysisViewMode.value = 'live'
   analysisResult.value = null
   analysisError.value = ''
   analysisDialogVisible.value = true
@@ -313,9 +425,9 @@ onMounted(loadData)
       </div>
 
       <el-menu
-        v-model="activeMenu"
         class="sidebar-menu"
-        default-active="requirements"
+        :default-active="activeMenu"
+        @select="handleMenuSelect"
       >
         <p class="menu-group-title">工作空间</p>
 
@@ -366,8 +478,8 @@ onMounted(loadData)
     <el-container class="workspace">
       <el-header class="topbar">
         <div>
-          <p class="breadcrumb">工作空间 / 需求管理</p>
-          <h1>需求管理</h1>
+          <p class="breadcrumb">{{ currentBreadcrumb }}</p>
+          <h1>{{ currentPageTitle }}</h1>
         </div>
 
         <div class="topbar-actions">
@@ -389,7 +501,8 @@ onMounted(loadData)
       </el-header>
 
       <el-main class="main-content">
-        <section class="page-heading">
+        <template v-if="activeMenu === 'requirements'">
+          <section class="page-heading">
           <div>
             <h2>软件需求列表</h2>
 
@@ -672,6 +785,218 @@ onMounted(loadData)
             </el-button>
           </aside>
         </section>
+        </template>
+
+        <template v-else-if="activeMenu === 'history'">
+          <section class="page-heading history-page-heading">
+            <div>
+              <h2>分析历史</h2>
+              <p>
+                按需求查看 Agent 的历次分析记录、工具计划和最终报告。
+              </p>
+            </div>
+
+            <el-button
+              :loading="historyLoading"
+              @click="
+                loadRequirementHistory(
+                  selectedHistoryRequirementId,
+                )
+              "
+            >
+              <el-icon><Refresh /></el-icon>
+              刷新历史
+            </el-button>
+          </section>
+
+          <section class="history-selector-panel">
+            <div>
+              <span class="history-selector-label">选择需求</span>
+              <p>选择一条需求后查看其全部分析记录。</p>
+            </div>
+
+            <el-select
+              v-model="selectedHistoryRequirementId"
+              placeholder="请选择需求"
+              filterable
+              class="history-requirement-select"
+              @change="handleHistoryRequirementChange"
+            >
+              <el-option
+                v-for="requirement in requirements"
+                :key="requirement.id"
+                :label="requirement.title"
+                :value="requirement.id"
+              >
+                <div class="history-option">
+                  <span>{{ requirement.title }}</span>
+                  <small>
+                    REQ-{{
+                      String(requirement.id).padStart(4, '0')
+                    }}
+                  </small>
+                </div>
+              </el-option>
+            </el-select>
+          </section>
+
+          <section class="history-summary-grid">
+            <article class="history-summary-card">
+              <span>当前需求</span>
+              <strong>
+                {{
+                  selectedHistoryRequirement?.title ??
+                  '暂未选择'
+                }}
+              </strong>
+              <p>
+                {{
+                  selectedHistoryRequirement
+                    ? `REQ-${String(
+                        selectedHistoryRequirement.id,
+                      ).padStart(4, '0')}`
+                    : '--'
+                }}
+              </p>
+            </article>
+
+            <article class="history-summary-card">
+              <span>历史记录数</span>
+              <strong>{{ historyRecords.length }}</strong>
+              <p>当前需求已保存的分析记录</p>
+            </article>
+
+            <article class="history-summary-card">
+              <span>最近分析时间</span>
+              <strong class="history-time-value">
+                {{
+                  historyRecords.length > 0
+                    ? formatDateTime(
+                        historyRecords[0].created_at,
+                      )
+                    : '--'
+                }}
+              </strong>
+              <p>按最新记录倒序展示</p>
+            </article>
+          </section>
+
+          <section class="history-table-panel">
+            <div class="panel-toolbar">
+              <div>
+                <h3>分析记录</h3>
+                <p>最多展示最近 100 条记录</p>
+              </div>
+            </div>
+
+            <el-table
+              v-loading="historyLoading"
+              :data="historyRecords"
+              row-key="id"
+              empty-text="该需求暂无分析历史"
+              class="history-table"
+            >
+              <el-table-column
+                label="分析时间"
+                width="180"
+              >
+                <template #default="{ row }">
+                  <span class="history-date">
+                    {{ formatDateTime(row.created_at) }}
+                  </span>
+                </template>
+              </el-table-column>
+
+              <el-table-column
+                label="检查结果"
+                width="130"
+              >
+                <template #default="{ row }">
+                  <el-tag
+                    :type="row.passed ? 'success' : 'warning'"
+                    effect="light"
+                    round
+                  >
+                    {{
+                      row.passed
+                        ? '检查通过'
+                        : '需要改进'
+                    }}
+                  </el-tag>
+                </template>
+              </el-table-column>
+
+              <el-table-column
+                label="执行工具"
+                min-width="250"
+              >
+                <template #default="{ row }">
+                  <div class="history-tool-tags">
+                    <el-tag
+                      v-for="tool in row.planned_tools"
+                      :key="tool"
+                      size="small"
+                      effect="plain"
+                    >
+                      {{ getToolLabel(tool) }}
+                    </el-tag>
+                  </div>
+                </template>
+              </el-table-column>
+
+              <el-table-column
+                label="问题数"
+                width="100"
+                align="center"
+              >
+                <template #default="{ row }">
+                  <span
+                    class="history-issue-count"
+                    :class="{ warning: row.issues.length > 0 }"
+                  >
+                    {{ row.issues.length }}
+                  </span>
+                </template>
+              </el-table-column>
+
+              <el-table-column
+                label="模型状态"
+                width="130"
+              >
+                <template #default="{ row }">
+                  <span
+                    class="model-status"
+                    :class="{ fallback: row.llm_fallback_used }"
+                  >
+                    <span></span>
+                    {{
+                      row.llm_fallback_used
+                        ? '已降级'
+                        : '正常'
+                    }}
+                  </span>
+                </template>
+              </el-table-column>
+
+              <el-table-column
+                label="操作"
+                width="120"
+                fixed="right"
+              >
+                <template #default="{ row }">
+                  <el-button
+                    link
+                    type="primary"
+                    @click="openHistoryRecord(row)"
+                  >
+                    <el-icon><View /></el-icon>
+                    查看报告
+                  </el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </section>
+        </template>
       </el-main>
     </el-container>
 
@@ -902,14 +1227,22 @@ onMounted(loadData)
             </el-tag>
 
             <el-tag
-              :type="analysisResult.cache_hit ? 'info' : 'primary'"
+              :type="
+                analysisViewMode === 'history'
+                  ? 'info'
+                  : analysisResult.cache_hit
+                    ? 'info'
+                    : 'primary'
+              "
               effect="plain"
               round
             >
               {{
-                analysisResult.cache_hit
-                  ? '缓存命中'
-                  : '本次实时分析'
+                analysisViewMode === 'history'
+                  ? '历史分析记录'
+                  : analysisResult.cache_hit
+                    ? '缓存命中'
+                    : '本次实时分析'
               }}
             </el-tag>
 
@@ -1979,6 +2312,159 @@ onMounted(loadData)
   line-height: 1.85;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.history-page-heading {
+  align-items: center;
+}
+
+.history-selector-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  margin-bottom: 18px;
+  padding: 20px 22px;
+  border: 1px solid #eaecf0;
+  border-radius: 13px;
+  background: white;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.03);
+}
+
+.history-selector-label {
+  color: #344054;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.history-selector-panel p {
+  margin: 6px 0 0;
+  color: #98a2b3;
+  font-size: 12px;
+}
+
+.history-requirement-select {
+  width: 360px;
+}
+
+.history-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.history-option small {
+  color: #98a2b3;
+  font-family: Consolas, monospace;
+}
+
+.history-summary-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 0.8fr 1fr;
+  gap: 18px;
+  margin-bottom: 20px;
+}
+
+.history-summary-card {
+  padding: 19px 20px;
+  border: 1px solid #eaecf0;
+  border-radius: 13px;
+  background: white;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.03);
+}
+
+.history-summary-card span {
+  color: #667085;
+  font-size: 12px;
+}
+
+.history-summary-card strong {
+  display: block;
+  margin-top: 8px;
+  overflow: hidden;
+  color: #101828;
+  font-size: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-summary-card p {
+  margin: 7px 0 0;
+  color: #98a2b3;
+  font-size: 11px;
+}
+
+.history-summary-card .history-time-value {
+  font-size: 16px;
+}
+
+.history-table-panel {
+  min-height: 430px;
+  overflow: hidden;
+  border: 1px solid #eaecf0;
+  border-radius: 14px;
+  background: white;
+  box-shadow:
+    0 1px 3px rgba(16, 24, 40, 0.04),
+    0 8px 24px rgba(16, 24, 40, 0.025);
+}
+
+.history-table {
+  width: 100%;
+}
+
+.history-date {
+  color: #475467;
+  font-family: Consolas, monospace;
+  font-size: 12px;
+}
+
+.history-tool-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.history-issue-count {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 50%;
+  background: #ecfdf3;
+  color: #067647;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.history-issue-count.warning {
+  background: #fff4ed;
+  color: #b54708;
+}
+
+.model-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #067647;
+  font-size: 12px;
+}
+
+.model-status span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #12b76a;
+}
+
+.model-status.fallback {
+  color: #b54708;
+}
+
+.model-status.fallback span {
+  background: #f79009;
 }
 
 @media (max-width: 1250px) {
