@@ -15,6 +15,14 @@ const createFormRef = ref()
 const detailDrawerVisible = ref(false)
 const selectedRequirement = ref(null)
 
+const analysisDialogVisible = ref(false)
+const analysisLoading = ref(false)
+const analysisError = ref('')
+const analysisResult = ref(null)
+const analysisRequirement = ref(null)
+const analyzingRequirementId = ref(null)
+const analysisResultsByRequirement = ref({})
+
 const createForm = reactive({
   title: '',
   content: '',
@@ -98,6 +106,24 @@ function getPriorityType(priority) {
   return types[priority] ?? 'info'
 }
 
+function getToolLabel(toolName) {
+  const labels = {
+    completeness_check: '完整性检查',
+    ambiguity_check: '歧义检测',
+    priority_suggestion: '优先级建议',
+  }
+
+  return labels[toolName] ?? toolName
+}
+
+function formatList(items) {
+  if (!items || items.length === 0) {
+    return '无'
+  }
+
+  return items.join('、')
+}
+
 async function loadData() {
   loading.value = true
 
@@ -146,6 +172,51 @@ function openCreateDialog() {
 function openDetailDrawer(requirement) {
   selectedRequirement.value = requirement
   detailDrawerVisible.value = true
+}
+
+async function runAnalysis(requirement) {
+  analysisRequirement.value = requirement
+  analysisResult.value = null
+  analysisError.value = ''
+  analysisDialogVisible.value = true
+  detailDrawerVisible.value = false
+  analysisLoading.value = true
+  analyzingRequirementId.value = requirement.id
+
+  try {
+    const response = await fetch(
+      `/api/requirements/${requirement.id}/analyze`,
+      {
+        method: 'POST',
+      },
+    )
+
+    if (!response.ok) {
+      throw new Error(`Agent 分析失败：HTTP ${response.status}`)
+    }
+
+    const result = await response.json()
+
+    analysisResult.value = result
+    analysisResultsByRequirement.value = {
+      ...analysisResultsByRequirement.value,
+      [requirement.id]: result,
+    }
+
+    if (result.cache_hit) {
+      ElMessage.success('已读取缓存中的分析结果')
+    } else {
+      ElMessage.success('Agent 分析完成')
+    }
+  } catch (error) {
+    analysisError.value =
+      'Agent 分析失败，请检查后端服务和模型配置。'
+    ElMessage.error(analysisError.value)
+    console.error(error)
+  } finally {
+    analysisLoading.value = false
+    analyzingRequirementId.value = null
+  }
 }
 
 async function submitRequirement() {
@@ -450,10 +521,19 @@ onMounted(loadData)
                 label="分析状态"
                 width="125"
               >
-                <template #default>
-                  <span class="analysis-status">
+                <template #default="{ row }">
+                  <span
+                    class="analysis-status"
+                    :class="{
+                      completed: analysisResultsByRequirement[row.id],
+                    }"
+                  >
                     <span></span>
-                    待分析
+                    {{
+                      analysisResultsByRequirement[row.id]
+                        ? '已分析'
+                        : '待分析'
+                    }}
                   </span>
                 </template>
               </el-table-column>
@@ -476,7 +556,8 @@ onMounted(loadData)
                   <el-button
                     link
                     type="primary"
-                    @click="showPendingMessage('Agent 分析')"
+                    :loading="analyzingRequirementId === row.id"
+                    @click="runAnalysis(row)"
                   >
                     <el-icon><MagicStick /></el-icon>
                     分析
@@ -715,7 +796,10 @@ onMounted(loadData)
 
           <el-button
             type="primary"
-            @click="showPendingMessage('Agent 分析')"
+            :loading="
+              analyzingRequirementId === selectedRequirement.id
+            "
+            @click="runAnalysis(selectedRequirement)"
           >
             <el-icon><MagicStick /></el-icon>
             启动 Agent 分析
@@ -723,6 +807,287 @@ onMounted(loadData)
         </div>
       </div>
     </el-drawer>
+
+    <el-dialog
+      v-model="analysisDialogVisible"
+      title="Agent 分析结果"
+      width="900px"
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <div class="analysis-dialog">
+        <div
+          v-if="analysisRequirement"
+          class="analysis-requirement-heading"
+        >
+          <div>
+            <span>当前需求</span>
+            <h3>{{ analysisRequirement.title }}</h3>
+          </div>
+
+          <span class="detail-code">
+            REQ-{{
+              String(analysisRequirement.id).padStart(4, '0')
+            }}
+          </span>
+        </div>
+
+        <div
+          v-if="analysisLoading"
+          class="analysis-loading"
+        >
+          <el-icon class="is-loading"><Loading /></el-icon>
+          <strong>Agent 正在分析需求</strong>
+          <p>
+            正在规划工具、执行检查并生成最终报告，请稍候。
+          </p>
+        </div>
+
+        <el-alert
+          v-else-if="analysisError"
+          :title="analysisError"
+          type="error"
+          show-icon
+          :closable="false"
+        />
+
+        <div
+          v-else-if="analysisResult"
+          class="analysis-result"
+        >
+          <div class="analysis-badges">
+            <el-tag
+              :type="analysisResult.passed ? 'success' : 'warning'"
+              effect="light"
+              round
+            >
+              {{
+                analysisResult.passed
+                  ? '整体检查通过'
+                  : '发现待改进项'
+              }}
+            </el-tag>
+
+            <el-tag
+              :type="analysisResult.cache_hit ? 'info' : 'primary'"
+              effect="plain"
+              round
+            >
+              {{
+                analysisResult.cache_hit
+                  ? '缓存命中'
+                  : '本次实时分析'
+              }}
+            </el-tag>
+
+            <el-tag
+              v-if="analysisResult.llm_fallback_used"
+              type="warning"
+              effect="plain"
+              round
+            >
+              已启用模型降级
+            </el-tag>
+          </div>
+
+          <section class="analysis-overview">
+            <article>
+              <span>当前优先级</span>
+              <strong>
+                {{
+                  getPriorityLabel(
+                    analysisResult.current_priority,
+                  )
+                }}
+              </strong>
+            </article>
+
+            <article>
+              <span>建议优先级</span>
+              <strong>
+                {{
+                  getPriorityLabel(
+                    analysisResult.suggested_priority,
+                  )
+                }}
+              </strong>
+            </article>
+
+            <article>
+              <span>计划工具数</span>
+              <strong>
+                {{ analysisResult.planned_tools.length }}
+              </strong>
+            </article>
+
+            <article>
+              <span>发现问题数</span>
+              <strong>{{ analysisResult.issues.length }}</strong>
+            </article>
+          </section>
+
+          <section class="analysis-section">
+            <div class="analysis-section-heading">
+              <h4>Agent 执行计划</h4>
+              <span>Planner 选择的分析工具</span>
+            </div>
+
+            <div class="planned-tools">
+              <el-tag
+                v-for="tool in analysisResult.planned_tools"
+                :key="tool"
+                effect="plain"
+              >
+                {{ getToolLabel(tool) }}
+              </el-tag>
+            </div>
+          </section>
+
+          <section class="analysis-section">
+            <div class="analysis-section-heading">
+              <h4>工具执行结果</h4>
+              <span>每个工具返回的结构化检查结果</span>
+            </div>
+
+            <div class="tool-result-grid">
+              <article
+                v-if="analysisResult.tool_results.completeness"
+                class="tool-result-card"
+              >
+                <div class="tool-result-title">
+                  <el-icon><CircleCheckFilled /></el-icon>
+                  <strong>完整性检查</strong>
+                </div>
+
+                <p>
+                  状态：
+                  {{
+                    analysisResult.tool_results.completeness
+                      .passed
+                      ? '通过'
+                      : '未通过'
+                  }}
+                </p>
+
+                <p>
+                  缺失字段：
+                  {{
+                    formatList(
+                      analysisResult.tool_results.completeness
+                        .missing_fields,
+                    )
+                  }}
+                </p>
+              </article>
+
+              <article
+                v-if="analysisResult.tool_results.ambiguity"
+                class="tool-result-card"
+              >
+                <div class="tool-result-title">
+                  <el-icon><Search /></el-icon>
+                  <strong>歧义检测</strong>
+                </div>
+
+                <p>
+                  状态：
+                  {{
+                    analysisResult.tool_results.ambiguity.passed
+                      ? '通过'
+                      : '发现歧义'
+                  }}
+                </p>
+
+                <p>
+                  命中词语：
+                  {{
+                    formatList(
+                      analysisResult.tool_results.ambiguity
+                        .matched_terms,
+                    )
+                  }}
+                </p>
+              </article>
+
+              <article
+                v-if="analysisResult.tool_results.priority"
+                class="tool-result-card"
+              >
+                <div class="tool-result-title">
+                  <el-icon><WarningFilled /></el-icon>
+                  <strong>优先级建议</strong>
+                </div>
+
+                <p>
+                  建议：
+                  {{
+                    getPriorityLabel(
+                      analysisResult.tool_results.priority
+                        .suggested_priority,
+                    )
+                  }}
+                </p>
+
+                <p>
+                  原因：
+                  {{
+                    analysisResult.tool_results.priority.reason
+                  }}
+                </p>
+              </article>
+            </div>
+          </section>
+
+          <section class="analysis-section">
+            <div class="analysis-section-heading">
+              <h4>发现的问题</h4>
+              <span>需要进一步完善的需求内容</span>
+            </div>
+
+            <el-empty
+              v-if="analysisResult.issues.length === 0"
+              description="未发现明显问题"
+              :image-size="70"
+            />
+
+            <ul v-else class="issue-list">
+              <li
+                v-for="issue in analysisResult.issues"
+                :key="issue"
+              >
+                <el-icon><WarningFilled /></el-icon>
+                <span>{{ issue }}</span>
+              </li>
+            </ul>
+          </section>
+
+          <section class="analysis-section report-section">
+            <div class="analysis-section-heading">
+              <h4>最终分析报告</h4>
+              <span>模型结合工具结果生成的总结</span>
+            </div>
+
+            <div class="final-report">
+              {{ analysisResult.final_report }}
+            </div>
+          </section>
+
+          <el-alert
+            v-if="analysisResult.llm_error"
+            :title="analysisResult.llm_error"
+            type="warning"
+            show-icon
+            :closable="false"
+          />
+        </div>
+      </div>
+
+      <template #footer>
+        <el-button @click="analysisDialogVisible = false">
+          关闭
+        </el-button>
+      </template>
+    </el-dialog>
   </el-container>
 </template>
 
@@ -1384,6 +1749,203 @@ onMounted(loadData)
   color: #101828;
   font-size: 18px;
   font-weight: 600;
+}
+
+.analysis-status.completed {
+  color: #067647;
+}
+
+.analysis-status.completed span {
+  background: #12b76a;
+}
+
+.analysis-dialog {
+  min-height: 250px;
+}
+
+.analysis-requirement-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 2px 0 18px;
+  border-bottom: 1px solid #eaecf0;
+}
+
+.analysis-requirement-heading span:first-child {
+  color: #98a2b3;
+  font-size: 12px;
+}
+
+.analysis-requirement-heading h3 {
+  margin: 7px 0 0;
+  color: #101828;
+  font-size: 18px;
+}
+
+.analysis-loading {
+  min-height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  color: #667085;
+  text-align: center;
+}
+
+.analysis-loading .el-icon {
+  color: #4f46e5;
+  font-size: 38px;
+}
+
+.analysis-loading strong {
+  margin-top: 18px;
+  color: #101828;
+  font-size: 16px;
+}
+
+.analysis-loading p {
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+
+.analysis-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  padding: 18px 0;
+}
+
+.analysis-overview {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.analysis-overview article {
+  padding: 15px;
+  border: 1px solid #eaecf0;
+  border-radius: 10px;
+  background: #f9fafb;
+}
+
+.analysis-overview span {
+  display: block;
+  color: #667085;
+  font-size: 12px;
+}
+
+.analysis-overview strong {
+  display: block;
+  margin-top: 8px;
+  color: #101828;
+  font-size: 17px;
+}
+
+.analysis-section {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid #eaecf0;
+}
+
+.analysis-section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 14px;
+}
+
+.analysis-section-heading h4 {
+  margin: 0;
+  color: #101828;
+  font-size: 15px;
+}
+
+.analysis-section-heading span {
+  color: #98a2b3;
+  font-size: 11px;
+}
+
+.planned-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.tool-result-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.tool-result-card {
+  min-height: 145px;
+  padding: 16px;
+  border: 1px solid #eaecf0;
+  border-radius: 11px;
+  background: #ffffff;
+}
+
+.tool-result-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #344054;
+}
+
+.tool-result-title .el-icon {
+  color: #4f46e5;
+}
+
+.tool-result-card p {
+  margin: 12px 0 0;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.issue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.issue-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 12px 14px;
+  border-radius: 9px;
+  background: #fffaeb;
+  color: #7a2e0e;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.issue-list .el-icon {
+  flex-shrink: 0;
+  margin-top: 3px;
+  color: #f79009;
+}
+
+.report-section {
+  padding-bottom: 4px;
+}
+
+.final-report {
+  padding: 17px;
+  border: 1px solid #e0e7ff;
+  border-radius: 10px;
+  background: #f8f9ff;
+  color: #344054;
+  font-size: 13px;
+  line-height: 1.85;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 @media (max-width: 1250px) {
