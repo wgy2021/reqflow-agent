@@ -124,6 +124,37 @@ function formatList(items) {
   return items.join('、')
 }
 
+async function loadLatestAnalysisStatuses(requirementItems) {
+  const historyEntries = await Promise.all(
+    requirementItems.map(async (requirement) => {
+      try {
+        const response = await fetch(
+          `/api/requirements/${requirement.id}/analyses?limit=1&offset=0`,
+        )
+
+        if (!response.ok) {
+          return [requirement.id, null]
+        }
+
+        const history = await response.json()
+
+        return [requirement.id, history[0] ?? null]
+      } catch (error) {
+        console.error(
+          `加载需求 ${requirement.id} 的分析状态失败：`,
+          error,
+        )
+
+        return [requirement.id, null]
+      }
+    }),
+  )
+
+  analysisResultsByRequirement.value = Object.fromEntries(
+    historyEntries.filter(([, analysis]) => analysis !== null),
+  )
+}
+
 async function loadData() {
   loading.value = true
 
@@ -142,6 +173,8 @@ async function loadData() {
 
     backendHealthy.value = healthData.status === 'ok'
     requirements.value = requirementsData
+
+    await loadLatestAnalysisStatuses(requirementsData)
   } catch (error) {
     backendHealthy.value = false
 
