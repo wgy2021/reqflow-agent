@@ -37,6 +37,31 @@ jobs:
       - name: Run tests
         run: python -m pytest -q
 
-
       - name: Build Docker image
         run: docker build -t reqflow-agent:ci .
+
+      - name: Smoke test Docker container
+        run: |
+          docker run -d \
+            --name reqflow-agent-ci \
+            -p 8000:8000 \
+            -e LLM_PROVIDER=fake \
+            -e DATABASE_URL=sqlite:///./ci_runtime.db \
+            reqflow-agent:ci
+
+          for attempt in {1..20}; do
+            if curl --fail --silent --show-error \
+              http://127.0.0.1:8000/health; then
+              echo "Container health check passed."
+              exit 0
+            fi
+
+            sleep 1
+          done
+
+          docker logs reqflow-agent-ci
+          exit 1
+
+      - name: Clean up Docker container
+        if: always()
+        run: docker rm -f reqflow-agent-ci || true
