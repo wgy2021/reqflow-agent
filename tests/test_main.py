@@ -6,7 +6,10 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.main import app
-from app.models import RequirementAnalysis
+from app.models import (
+    RequirementAnalysis,
+    RequirementAnalysisCache,
+)
 
 
 TEST_DATABASE_URL = "sqlite://"
@@ -552,3 +555,57 @@ def test_list_requirement_analysis_history_supports_pagination() -> None:
     assert paginated_history[0]["id"] == (
         full_history[1]["id"]
     )
+
+def test_delete_requirement_removes_analysis_data() -> None:
+    requirement = create_sample_requirement()
+    requirement_id = requirement["id"]
+
+    analyze_response = client.post(
+        f"/requirements/{requirement_id}/analyze"
+    )
+
+    assert analyze_response.status_code == 200
+
+    # 先确认分析历史和缓存确实已经创建。
+    with TestingSessionLocal() as db:
+        analysis_records_before_delete = list(
+            db.scalars(
+                select(RequirementAnalysis).where(
+                    RequirementAnalysis.requirement_id
+                    == requirement_id
+                )
+            ).all()
+        )
+
+        cache_before_delete = db.get(
+            RequirementAnalysisCache,
+            requirement_id,
+        )
+
+    assert len(analysis_records_before_delete) == 1
+    assert cache_before_delete is not None
+
+    delete_response = client.delete(
+        f"/requirements/{requirement_id}"
+    )
+
+    assert delete_response.status_code == 204
+
+    # 删除需求后，关联的分析历史和缓存也必须消失。
+    with TestingSessionLocal() as db:
+        analysis_records_after_delete = list(
+            db.scalars(
+                select(RequirementAnalysis).where(
+                    RequirementAnalysis.requirement_id
+                    == requirement_id
+                )
+            ).all()
+        )
+
+        cache_after_delete = db.get(
+            RequirementAnalysisCache,
+            requirement_id,
+        )
+
+    assert analysis_records_after_delete == []
+    assert cache_after_delete is None

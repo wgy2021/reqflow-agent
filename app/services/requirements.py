@@ -1,7 +1,11 @@
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.models import Requirement
+from app.models import (
+    Requirement,
+    RequirementAnalysis,
+    RequirementAnalysisCache,
+)
 from app.schemas import (
     RequirementCreate,
     RequirementUpdate,
@@ -83,5 +87,26 @@ def delete_requirement(
     db: Session,
     db_requirement: Requirement,
 ) -> None:
+    """删除需求以及关联的分析历史和缓存记录。"""
+
+    requirement_id = db_requirement.id
+
+    # 缓存同时关联需求和分析记录，因此必须先删除。
+    db.execute(
+        delete(RequirementAnalysisCache).where(
+            RequirementAnalysisCache.requirement_id
+            == requirement_id
+        )
+    )
+
+    # 再删除该需求的全部分析历史。
+    db.execute(
+        delete(RequirementAnalysis).where(
+            RequirementAnalysis.requirement_id
+            == requirement_id
+        )
+    )
+
+    # 最后删除需求本身。
     db.delete(db_requirement)
     db.commit()
