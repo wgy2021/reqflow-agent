@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
 const requirements = ref([])
@@ -9,6 +9,51 @@ const backendHealthy = ref(false)
 const keyword = ref('')
 const priorityFilter = ref(null)
 const activeMenu = ref('requirements')
+const createDialogVisible = ref(false)
+const createSubmitting = ref(false)
+const createFormRef = ref()
+
+const createForm = reactive({
+  title: '',
+  content: '',
+  priority: 2,
+})
+
+const createRules = {
+  title: [
+    {
+      required: true,
+      message: '请输入需求标题',
+      trigger: 'blur',
+    },
+    {
+      min: 1,
+      max: 100,
+      message: '标题长度不能超过 100 个字符',
+      trigger: 'blur',
+    },
+  ],
+  content: [
+    {
+      required: true,
+      message: '请输入需求内容',
+      trigger: 'blur',
+    },
+    {
+      min: 1,
+      max: 5000,
+      message: '需求内容不能超过 5000 个字符',
+      trigger: 'blur',
+    },
+  ],
+  priority: [
+    {
+      required: true,
+      message: '请选择需求优先级',
+      trigger: 'change',
+    },
+  ],
+}
 
 const filteredRequirements = computed(() => {
   return requirements.value.filter((item) => {
@@ -81,6 +126,64 @@ async function loadData() {
 
 function showPendingMessage(featureName) {
   ElMessage.info(`${featureName}将在下一步接入。`)
+}
+
+function resetCreateForm() {
+  createForm.title = ''
+  createForm.content = ''
+  createForm.priority = 2
+
+  createFormRef.value?.clearValidate()
+}
+
+function openCreateDialog() {
+  resetCreateForm()
+  createDialogVisible.value = true
+}
+
+async function submitRequirement() {
+  if (!createFormRef.value) {
+    return
+  }
+
+  const formValid = await createFormRef.value
+    .validate()
+    .catch(() => false)
+
+  if (!formValid) {
+    return
+  }
+
+  createSubmitting.value = true
+
+  try {
+    const response = await fetch('/api/requirements', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: createForm.title.trim(),
+        content: createForm.content.trim(),
+        priority: createForm.priority,
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`创建需求失败：HTTP ${response.status}`)
+    }
+
+    createDialogVisible.value = false
+
+    ElMessage.success('需求创建成功')
+
+    await loadData()
+  } catch (error) {
+    ElMessage.error('需求创建失败，请检查填写内容和后端服务。')
+    console.error(error)
+  } finally {
+    createSubmitting.value = false
+  }
 }
 
 onMounted(loadData)
@@ -187,7 +290,7 @@ onMounted(loadData)
           <el-button
             type="primary"
             size="large"
-            @click="showPendingMessage('新建需求')"
+            @click="openCreateDialog"
           >
             <el-icon><Plus /></el-icon>
             新建需求
@@ -450,6 +553,98 @@ onMounted(loadData)
         </section>
       </el-main>
     </el-container>
+
+    <el-dialog
+      v-model="createDialogVisible"
+      title="新建软件需求"
+      width="580px"
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <el-form
+        ref="createFormRef"
+        :model="createForm"
+        :rules="createRules"
+        label-position="top"
+      >
+        <el-form-item
+          label="需求标题"
+          prop="title"
+        >
+          <el-input
+            v-model="createForm.title"
+            maxlength="100"
+            show-word-limit
+            placeholder="例如：用户登录失败提示"
+          />
+        </el-form-item>
+
+        <el-form-item
+          label="需求内容"
+          prop="content"
+        >
+          <el-input
+            v-model="createForm.content"
+            type="textarea"
+            :rows="6"
+            maxlength="5000"
+            show-word-limit
+            resize="none"
+            placeholder="请描述使用场景、用户行为、系统响应和限制条件"
+          />
+        </el-form-item>
+
+        <el-form-item
+          label="需求优先级"
+          prop="priority"
+        >
+          <el-select
+            v-model="createForm.priority"
+            class="dialog-priority-select"
+          >
+            <el-option
+              label="高优先级"
+              :value="1"
+            />
+
+            <el-option
+              label="中优先级"
+              :value="2"
+            />
+
+            <el-option
+              label="低优先级"
+              :value="3"
+            />
+          </el-select>
+        </el-form-item>
+
+        <div class="form-notice">
+          <el-icon><InfoFilled /></el-icon>
+
+          <span>
+            创建完成后，可以在需求列表中启动 Agent 分析。
+          </span>
+        </div>
+      </el-form>
+
+      <template #footer>
+        <el-button
+          :disabled="createSubmitting"
+          @click="createDialogVisible = false"
+        >
+          取消
+        </el-button>
+
+        <el-button
+          type="primary"
+          :loading="createSubmitting"
+          @click="submitRequirement"
+        >
+          创建需求
+        </el-button>
+      </template>
+    </el-dialog>
   </el-container>
 </template>
 
@@ -991,6 +1186,42 @@ onMounted(loadData)
 .start-button {
   width: 100%;
   margin-top: 18px;
+}
+
+.dialog-priority-select {
+  width: 100%;
+}
+
+.form-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 9px;
+  background: #f8fafc;
+  color: #667085;
+  font-size: 12px;
+}
+
+.form-notice .el-icon {
+  flex-shrink: 0;
+  color: #4f46e5;
+  font-size: 16px;
+}
+
+:deep(.el-dialog) {
+  border-radius: 14px;
+}
+
+:deep(.el-dialog__title) {
+  color: #101828;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+:deep(.el-form-item__label) {
+  color: #344054;
+  font-weight: 500;
 }
 
 @media (max-width: 1250px) {
