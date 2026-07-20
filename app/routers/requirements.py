@@ -195,8 +195,19 @@ def analyze_requirement_endpoint(
 )
 def list_requirement_analyses(
     requirement_id: int,
+    limit: int = Query(
+        default=20,
+        ge=1,
+        le=100,
+        description="每页返回的分析记录数量",
+    ),
+    offset: int = Query(
+        default=0,
+        ge=0,
+        description="跳过的分析记录数量",
+    ),
     db: Session = Depends(get_db),
-):
+) -> list[RequirementAnalysisHistoryResponse]:
     db_requirement = requirement_service.get_requirement(
         db=db,
         requirement_id=requirement_id,
@@ -211,6 +222,8 @@ def list_requirement_analyses(
     return analysis_service.list_analyses(
         db=db,
         requirement_id=requirement_id,
+        limit=limit,
+        offset=offset,
     )
 
 @router.delete(

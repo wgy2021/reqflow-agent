@@ -144,8 +144,10 @@ def analysis_to_result(
 def list_analyses(
     db: Session,
     requirement_id: int,
+    limit: int,
+    offset: int,
 ) -> list[RequirementAnalysis]:
-    """查询某条需求的全部历史分析记录。"""
+    """分页查询某条需求的历史分析记录。"""
 
     statement = (
         select(RequirementAnalysis)
@@ -154,6 +156,12 @@ def list_analyses(
             == requirement_id
         )
         .order_by(RequirementAnalysis.id.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+
+    return list(
+        db.scalars(statement).all()
     )
 
     return list(

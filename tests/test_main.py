@@ -504,3 +504,51 @@ def test_analyze_requirement_can_force_refresh() -> None:
 
     # 第一次分析和强制刷新各保存一条记录。
     assert len(analysis_records) == 2
+
+def test_list_requirement_analysis_history_supports_pagination() -> None:
+    requirement = create_sample_requirement()
+    requirement_id = requirement["id"]
+
+    first_response = client.post(
+        f"/requirements/{requirement_id}/analyze"
+    )
+
+    second_response = client.post(
+        f"/requirements/{requirement_id}/analyze",
+        params={"force_refresh": True},
+    )
+
+    third_response = client.post(
+        f"/requirements/{requirement_id}/analyze",
+        params={"force_refresh": True},
+    )
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+    assert third_response.status_code == 200
+
+    full_history_response = client.get(
+        f"/requirements/{requirement_id}/analyses"
+    )
+
+    paginated_response = client.get(
+        f"/requirements/{requirement_id}/analyses",
+        params={
+            "limit": 1,
+            "offset": 1,
+        },
+    )
+
+    assert full_history_response.status_code == 200
+    assert paginated_response.status_code == 200
+
+    full_history = full_history_response.json()
+    paginated_history = paginated_response.json()
+
+    assert len(full_history) == 3
+    assert len(paginated_history) == 1
+
+    # 跳过最新一条后，返回第二新的记录。
+    assert paginated_history[0]["id"] == (
+        full_history[1]["id"]
+    )
