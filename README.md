@@ -62,7 +62,45 @@ flowchart TD
     P --> D
 ```
 
-## 环境配置
+## Agent 执行流程
+
+```mermaid
+sequenceDiagram
+    participant User as 用户
+    participant API as FastAPI
+    participant Cache as 分析缓存
+    participant Agent as Requirement Analyzer
+    participant LLM as LLM Client
+    participant Tools as Tool Registry
+    participant DB as SQLite
+
+    User->>API: POST /requirements/{id}/analyze
+    API->>DB: 查询需求数据
+    DB-->>API: 返回需求内容
+
+    API->>Cache: 根据 SHA-256 指纹查询缓存
+
+    alt 缓存命中且未强制刷新
+        Cache-->>API: 返回已有分析记录
+        API-->>User: cache_hit = true
+    else 缓存未命中或 force_refresh=true
+        API->>Agent: 提交需求
+        Agent->>LLM: 规划需要执行的工具
+        LLM-->>Agent: 返回工具名称
+
+        Agent->>Tools: 执行分析工具
+        Tools-->>Agent: 返回工具结果
+
+        Agent->>LLM: 根据工具结果生成报告
+        LLM-->>Agent: 返回 final_report
+
+        Agent-->>API: 返回完整分析结果
+        API->>DB: 保存分析历史
+        API->>Cache: 更新最新缓存
+        API-->>User: cache_hit = false
+    end
+```
+
 
 ## 环境配置
 
