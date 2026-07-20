@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
 const requirements = ref([])
@@ -12,6 +12,11 @@ const activeMenu = ref('requirements')
 const createDialogVisible = ref(false)
 const createSubmitting = ref(false)
 const createFormRef = ref()
+
+const editDialogVisible = ref(false)
+const editSubmitting = ref(false)
+const editFormRef = ref()
+
 const detailDrawerVisible = ref(false)
 const selectedRequirement = ref(null)
 
@@ -29,6 +34,13 @@ const historyRecords = ref([])
 const selectedHistoryRequirementId = ref(null)
 
 const createForm = reactive({
+  title: '',
+  content: '',
+  priority: 2,
+})
+
+const editForm = reactive({
+  id: null,
   title: '',
   content: '',
   priority: 2,
@@ -316,6 +328,84 @@ function openCreateDialog() {
 function openDetailDrawer(requirement) {
   selectedRequirement.value = requirement
   detailDrawerVisible.value = true
+}
+
+async function openEditDialog(requirement) {
+  editForm.id = requirement.id
+  editForm.title = requirement.title
+  editForm.content = requirement.content
+  editForm.priority = requirement.priority
+
+  detailDrawerVisible.value = false
+  editDialogVisible.value = true
+
+  await nextTick()
+  editFormRef.value?.clearValidate()
+}
+
+async function submitRequirementEdit() {
+  if (!editFormRef.value || editForm.id === null) {
+    return
+  }
+
+  const formValid = await editFormRef.value
+    .validate()
+    .catch(() => false)
+
+  if (!formValid) {
+    return
+  }
+
+  editSubmitting.value = true
+
+  try {
+    const response = await fetch(
+      `/api/requirements/${editForm.id}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: editForm.title.trim(),
+          content: editForm.content.trim(),
+          priority: editForm.priority,
+        }),
+      },
+    )
+
+    if (!response.ok) {
+      throw new Error(`更新需求失败：HTTP ${response.status}`)
+    }
+
+    const updatedRequirement = await response.json()
+
+    requirements.value = requirements.value.map((item) =>
+      item.id === updatedRequirement.id
+        ? updatedRequirement
+        : item,
+    )
+
+    selectedRequirement.value = updatedRequirement
+
+    const updatedAnalysisStatuses = {
+      ...analysisResultsByRequirement.value,
+    }
+
+    delete updatedAnalysisStatuses[updatedRequirement.id]
+    analysisResultsByRequirement.value =
+      updatedAnalysisStatuses
+
+    editDialogVisible.value = false
+    detailDrawerVisible.value = true
+
+    ElMessage.success('需求更新成功，请重新执行 Agent 分析')
+  } catch (error) {
+    ElMessage.error('需求更新失败，请检查填写内容和后端服务。')
+    console.error(error)
+  } finally {
+    editSubmitting.value = false
+  }
 }
 
 async function runAnalysis(requirement) {
@@ -1092,6 +1182,100 @@ onMounted(loadData)
       </template>
     </el-dialog>
 
+    <el-dialog
+      v-model="editDialogVisible"
+      title="编辑软件需求"
+      width="580px"
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <el-form
+        ref="editFormRef"
+        :model="editForm"
+        :rules="createRules"
+        label-position="top"
+      >
+        <el-form-item
+          label="需求标题"
+          prop="title"
+        >
+          <el-input
+            v-model="editForm.title"
+            maxlength="100"
+            show-word-limit
+            placeholder="请输入需求标题"
+          />
+        </el-form-item>
+
+        <el-form-item
+          label="需求内容"
+          prop="content"
+        >
+          <el-input
+            v-model="editForm.content"
+            type="textarea"
+            :rows="6"
+            maxlength="5000"
+            show-word-limit
+            resize="none"
+            placeholder="请描述使用场景、用户行为、系统响应和限制条件"
+          />
+        </el-form-item>
+
+        <el-form-item
+          label="需求优先级"
+          prop="priority"
+        >
+          <el-select
+            v-model="editForm.priority"
+            class="dialog-priority-select"
+          >
+            <el-option
+              label="高优先级"
+              :value="1"
+            />
+
+            <el-option
+              label="中优先级"
+              :value="2"
+            />
+
+            <el-option
+              label="低优先级"
+              :value="3"
+            />
+          </el-select>
+        </el-form-item>
+
+        <el-alert
+          title="修改标题、内容或优先级后，需要重新执行 Agent 分析。已有分析历史会继续保留。"
+          type="warning"
+          show-icon
+          :closable="false"
+        />
+      </el-form>
+
+      <template #footer>
+        <el-button
+          :disabled="editSubmitting"
+          @click="
+            editDialogVisible = false;
+            detailDrawerVisible = true
+          "
+        >
+          取消
+        </el-button>
+
+        <el-button
+          type="primary"
+          :loading="editSubmitting"
+          @click="submitRequirementEdit"
+        >
+          保存修改
+        </el-button>
+      </template>
+    </el-dialog>
+
     <el-drawer
       v-model="detailDrawerVisible"
       title="需求详情"
@@ -1141,15 +1325,36 @@ onMounted(loadData)
         <section class="detail-section">
           <span class="detail-label">当前分析状态</span>
 
-          <span class="analysis-status">
+          <span
+            class="analysis-status"
+            :class="{
+              completed:
+                analysisResultsByRequirement[
+                  selectedRequirement.id
+                ],
+            }"
+          >
             <span></span>
-            待分析
+            {{
+              analysisResultsByRequirement[
+                selectedRequirement.id
+              ]
+                ? '已分析'
+                : '待分析'
+            }}
           </span>
         </section>
 
         <div class="detail-actions">
           <el-button @click="detailDrawerVisible = false">
             关闭
+          </el-button>
+
+          <el-button
+            @click="openEditDialog(selectedRequirement)"
+          >
+            <el-icon><Edit /></el-icon>
+            编辑需求
           </el-button>
 
           <el-button
