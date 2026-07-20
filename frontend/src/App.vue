@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const requirements = ref([])
 const loading = ref(false)
@@ -16,6 +16,7 @@ const createFormRef = ref()
 const editDialogVisible = ref(false)
 const editSubmitting = ref(false)
 const editFormRef = ref()
+const deletingRequirementId = ref(null)
 
 const detailDrawerVisible = ref(false)
 const selectedRequirement = ref(null)
@@ -405,6 +406,72 @@ async function submitRequirementEdit() {
     console.error(error)
   } finally {
     editSubmitting.value = false
+  }
+}
+
+async function deleteRequirement(requirement) {
+  try {
+    await ElMessageBox.confirm(
+      `确定删除“${requirement.title}”吗？该需求的分析历史和缓存也会一起删除，此操作无法撤销。`,
+      '删除需求',
+      {
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+        confirmButtonClass: 'danger-confirm-button',
+      },
+    )
+  } catch {
+    return
+  }
+
+  deletingRequirementId.value = requirement.id
+
+  try {
+    const response = await fetch(
+      `/api/requirements/${requirement.id}`,
+      {
+        method: 'DELETE',
+      },
+    )
+
+    if (!response.ok) {
+      throw new Error(`删除需求失败：HTTP ${response.status}`)
+    }
+
+    requirements.value = requirements.value.filter(
+      (item) => item.id !== requirement.id,
+    )
+
+    const updatedAnalysisStatuses = {
+      ...analysisResultsByRequirement.value,
+    }
+    delete updatedAnalysisStatuses[requirement.id]
+    analysisResultsByRequirement.value =
+      updatedAnalysisStatuses
+
+    if (
+      selectedHistoryRequirementId.value ===
+      requirement.id
+    ) {
+      selectedHistoryRequirementId.value =
+        requirements.value[0]?.id ?? null
+
+      await loadRequirementHistory(
+        selectedHistoryRequirementId.value,
+      )
+    }
+
+    selectedRequirement.value = null
+    detailDrawerVisible.value = false
+    editDialogVisible.value = false
+
+    ElMessage.success('需求删除成功')
+  } catch (error) {
+    ElMessage.error('需求删除失败，请检查后端服务。')
+    console.error(error)
+  } finally {
+    deletingRequirementId.value = null
   }
 }
 
@@ -1346,27 +1413,41 @@ onMounted(loadData)
         </section>
 
         <div class="detail-actions">
-          <el-button @click="detailDrawerVisible = false">
-            关闭
-          </el-button>
-
           <el-button
-            @click="openEditDialog(selectedRequirement)"
+            type="danger"
+            plain
+            :loading="
+              deletingRequirementId === selectedRequirement.id
+            "
+            @click="deleteRequirement(selectedRequirement)"
           >
-            <el-icon><Edit /></el-icon>
-            编辑需求
+            <el-icon><Delete /></el-icon>
+            删除需求
           </el-button>
 
-          <el-button
-            type="primary"
+          <div class="detail-actions-right">
+            <el-button @click="detailDrawerVisible = false">
+              关闭
+            </el-button>
+
+            <el-button
+              @click="openEditDialog(selectedRequirement)"
+            >
+              <el-icon><Edit /></el-icon>
+              编辑需求
+            </el-button>
+
+            <el-button
+              type="primary"
             :loading="
               analyzingRequirementId === selectedRequirement.id
             "
             @click="runAnalysis(selectedRequirement)"
           >
-            <el-icon><MagicStick /></el-icon>
-            启动 Agent 分析
-          </el-button>
+              <el-icon><MagicStick /></el-icon>
+              启动 Agent 分析
+            </el-button>
+          </div>
         </div>
       </div>
     </el-drawer>
@@ -2310,10 +2391,17 @@ onMounted(loadData)
 
 .detail-actions {
   display: flex;
-  justify-content: flex-end;
-  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   margin-top: auto;
   padding-top: 24px;
+}
+
+.detail-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 :deep(.el-drawer__title) {
@@ -2670,6 +2758,16 @@ onMounted(loadData)
 
 .model-status.fallback span {
   background: #f79009;
+}
+
+:global(.danger-confirm-button) {
+  border-color: #d92d20 !important;
+  background: #d92d20 !important;
+}
+
+:global(.danger-confirm-button:hover) {
+  border-color: #b42318 !important;
+  background: #b42318 !important;
 }
 
 @media (max-width: 1250px) {
