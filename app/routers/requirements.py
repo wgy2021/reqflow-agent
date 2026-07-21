@@ -15,8 +15,9 @@ from app.schemas import (
     RequirementResponse,
     RequirementUpdate,
 )
-from app.services import requirements as requirement_service
 from app.services import analyses as analysis_service
+from app.services import rag as rag_service
+from app.services import requirements as requirement_service
 from typing import Any
 
 from app.agent.analyzer import analyze_requirement
@@ -147,11 +148,28 @@ def analyze_requirement_endpoint(
             detail="Requirement not found",
         )
 
+    knowledge_results = (
+        rag_service.retrieve_requirement_context(
+            db=db,
+            title=db_requirement.title,
+            content=db_requirement.content,
+            top_k=3,
+            min_score=0.0,
+        )
+    )
+
+    knowledge_context = (
+        rag_service.format_knowledge_context(
+            knowledge_results
+        )
+    )
+
     fingerprint = (
         analysis_service.build_requirement_fingerprint(
             title=db_requirement.title,
             content=db_requirement.content,
             priority=db_requirement.priority,
+            knowledge_context=knowledge_context,
         )
     )
 
@@ -174,6 +192,7 @@ def analyze_requirement_endpoint(
         title=db_requirement.title,
         content=db_requirement.content,
         priority=db_requirement.priority,
+        knowledge_context=knowledge_context,
     )
 
     analysis_result["cache_hit"] = False

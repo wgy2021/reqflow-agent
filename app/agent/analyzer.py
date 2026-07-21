@@ -21,10 +21,23 @@ def analyze_requirement(
     content: str,
     priority: int | None,
     llm_client: LLMClient | None = None,
+    knowledge_context: str = "",
 ) -> dict[str, Any]:
     """由 Planner 选择工具，再执行并汇总分析结果。"""
 
     client = llm_client or get_llm_client()
+    report_content = content
+
+    normalized_knowledge_context = (
+        knowledge_context.strip()
+    )
+
+    if normalized_knowledge_context:
+        report_content = (
+            f"{content}\n\n"
+            "以下是从知识库检索到的参考上下文：\n"
+            f"{normalized_knowledge_context}"
+        )
 
     available_tools = list_tools()
     available_tool_names = {
@@ -173,7 +186,7 @@ def analyze_requirement(
     try:
         final_report = client.generate_report(
             title=title,
-            content=content,
+            content=report_content,
             priority=priority,
             planned_tools=planned_tools,
             tool_results=tool_results,
@@ -197,7 +210,7 @@ def analyze_requirement(
 
         final_report = fallback_client.generate_report(
             title=title,
-            content=content,
+            content=report_content,
             priority=priority,
             planned_tools=planned_tools,
             tool_results=tool_results,

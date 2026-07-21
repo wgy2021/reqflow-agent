@@ -609,3 +609,91 @@ def test_delete_requirement_removes_analysis_data() -> None:
 
     assert analysis_records_after_delete == []
     assert cache_after_delete is None
+
+def test_rag_context_change_invalidates_analysis_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requirement = create_sample_requirement()
+    requirement_id = requirement["id"]
+
+    current_context = {
+        "value": "知识上下文 A",
+    }
+
+    monkeypatch.setattr(
+        (
+            "app.routers.requirements."
+            "rag_service.retrieve_requirement_context"
+        ),
+        lambda **kwargs: [],
+    )
+
+    monkeypatch.setattr(
+        (
+            "app.routers.requirements."
+            "rag_service.format_knowledge_context"
+        ),
+        lambda results: current_context["value"],
+    )
+
+    def fake_analyze_requirement(
+        title: str,
+        content: str,
+        priority: int | None,
+        knowledge_context: str = "",
+    ) -> dict:
+        return {
+            "passed": True,
+            "planned_tools": [
+                "completeness_check",
+            ],
+            "current_priority": priority,
+            "suggested_priority": None,
+            "priority_consistent": None,
+            "issues": [],
+            "tool_results": {},
+            "final_report": (
+                f"使用知识上下文：{knowledge_context}"
+            ),
+            "llm_fallback_used": False,
+            "llm_error": None,
+        }
+
+    monkeypatch.setattr(
+        (
+            "app.routers.requirements."
+            "analyze_requirement"
+        ),
+        fake_analyze_requirement,
+    )
+
+    first_response = client.post(
+        f"/requirements/{requirement_id}/analyze"
+    )
+
+    second_response = client.post(
+        f"/requirements/{requirement_id}/analyze"
+    )
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+
+    assert first_response.json()["cache_hit"] is False
+    assert second_response.json()["cache_hit"] is True
+
+    assert first_response.json()["final_report"] == (
+        "使用知识上下文：知识上下文 A"
+    )
+
+    current_context["value"] = "知识上下文 B"
+
+    third_response = client.post(
+        f"/requirements/{requirement_id}/analyze"
+    )
+
+    assert third_response.status_code == 200
+    assert third_response.json()["cache_hit"] is False
+
+    assert third_response.json()["final_report"] == (
+        "使用知识上下文：知识上下文 B"
+    )

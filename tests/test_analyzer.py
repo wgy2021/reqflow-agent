@@ -57,6 +57,7 @@ class StaticPlanner(LLMClient):
         planned_tools: list[str],
     ) -> None:
         self.planned_tools = planned_tools
+        self.report_content: str | None = None
 
     def plan_tools(
         self,
@@ -77,6 +78,7 @@ class StaticPlanner(LLMClient):
         issues: list[str],
         passed: bool,
     ) -> str:
+        self.report_content = content
         return "固定分析报告"
 
 
@@ -195,4 +197,34 @@ def test_analyzer_falls_back_when_planner_fails() -> None:
         "当前优先级：3。"
         "已执行工具：completeness_check。"
         "分析结论：未发现明显问题。"
+    )
+
+
+def test_analyzer_passes_knowledge_context_to_report() -> None:
+    planner = StaticPlanner(
+        planned_tools=[
+            "completeness_check",
+        ]
+    )
+
+    result = analyze_requirement(
+        title="用户登录",
+        content="用户登录必须校验密码",
+        priority=1,
+        llm_client=planner,
+        knowledge_context=(
+            "[知识片段 1]\n"
+            "文档：登录安全规范\n"
+            "内容：密码必须加密保存"
+        ),
+    )
+
+    assert result["final_report"] == "固定分析报告"
+
+    assert planner.report_content == (
+        "用户登录必须校验密码\n\n"
+        "以下是从知识库检索到的参考上下文：\n"
+        "[知识片段 1]\n"
+        "文档：登录安全规范\n"
+        "内容：密码必须加密保存"
     )

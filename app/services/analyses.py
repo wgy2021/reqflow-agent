@@ -11,13 +11,14 @@ from app.models import (
 )
 
 
-ANALYSIS_CACHE_VERSION = "v1"
+ANALYSIS_CACHE_VERSION = "v2"
 
 
 def build_requirement_fingerprint(
     title: str,
     content: str,
     priority: int | None,
+    knowledge_context: str = "",
 ) -> str:
     """根据需求内容生成稳定的 SHA-256 指纹。"""
 
@@ -26,6 +27,7 @@ def build_requirement_fingerprint(
         "title": title,
         "content": content,
         "priority": priority,
+        "knowledge_context": knowledge_context.strip(),
     }
 
     normalized_data = json.dumps(
