@@ -12,13 +12,12 @@ import {
 } from './api/requirements'
 import { getSystemHealth } from './api/system'
 import AnalysisHistoryView from './views/AnalysisHistoryView.vue'
+import RequirementsView from './views/RequirementsView.vue'
 
 const requirements = ref([])
 const loading = ref(false)
 const backendHealthy = ref(false)
 
-const keyword = ref('')
-const priorityFilter = ref(null)
 const activeMenu = ref('requirements')
 const createDialogVisible = ref(false)
 const createSubmitting = ref(false)
@@ -93,27 +92,6 @@ const createRules = {
     },
   ],
 }
-
-const filteredRequirements = computed(() => {
-  return requirements.value.filter((item) => {
-    const normalizedKeyword = keyword.value.trim().toLowerCase()
-
-    const matchesKeyword =
-      normalizedKeyword === '' ||
-      item.title.toLowerCase().includes(normalizedKeyword) ||
-      item.content.toLowerCase().includes(normalizedKeyword)
-
-    const matchesPriority =
-      priorityFilter.value === null ||
-      item.priority === priorityFilter.value
-
-    return matchesKeyword && matchesPriority
-  })
-})
-
-const highPriorityCount = computed(() => {
-  return requirements.value.filter((item) => item.priority === 1).length
-})
 
 const currentPageTitle = computed(() => {
   return activeMenu.value === 'history'
@@ -622,289 +600,22 @@ onMounted(loadData)
 
       <el-main class="main-content">
         <template v-if="activeMenu === 'requirements'">
-          <section class="page-heading">
-          <div>
-            <h2>软件需求列表</h2>
-
-            <p>
-              统一管理软件需求，并通过 Agent 完成完整性、歧义和优先级分析。
-            </p>
-          </div>
-
-          <el-button
-            type="primary"
-            size="large"
-            @click="openCreateDialog"
-          >
-            <el-icon><Plus /></el-icon>
-            新建需求
-          </el-button>
-        </section>
-
-        <section class="metrics">
-          <article class="metric-card">
-            <div class="metric-icon blue">
-              <el-icon><Document /></el-icon>
-            </div>
-
-            <div>
-              <span>需求总数</span>
-              <strong>{{ requirements.length }}</strong>
-              <p>当前系统中的全部需求</p>
-            </div>
-          </article>
-
-          <article class="metric-card">
-            <div class="metric-icon orange">
-              <el-icon><WarningFilled /></el-icon>
-            </div>
-
-            <div>
-              <span>高优先级需求</span>
-              <strong>{{ highPriorityCount }}</strong>
-              <p>需要优先处理的需求</p>
-            </div>
-          </article>
-
-          <article class="metric-card">
-            <div class="metric-icon green">
-              <el-icon><Connection /></el-icon>
-            </div>
-
-            <div>
-              <span>后端服务</span>
-
-              <strong class="text-value">
-                {{ backendHealthy ? '运行正常' : '连接异常' }}
-              </strong>
-
-              <p>FastAPI 健康检查结果</p>
-            </div>
-          </article>
-        </section>
-
-        <section class="content-grid">
-          <article class="table-panel">
-            <div class="panel-toolbar">
-              <div>
-                <h3>需求列表</h3>
-                <p>共 {{ filteredRequirements.length }} 条记录</p>
-              </div>
-
-              <div class="filters">
-                <el-input
-                  v-model="keyword"
-                  clearable
-                  placeholder="搜索需求标题或内容"
-                  class="search-input"
-                >
-                  <template #prefix>
-                    <el-icon><Search /></el-icon>
-                  </template>
-                </el-input>
-
-                <el-select
-                  v-model="priorityFilter"
-                  clearable
-                  placeholder="全部优先级"
-                  class="priority-select"
-                >
-                  <el-option
-                    label="高优先级"
-                    :value="1"
-                  />
-
-                  <el-option
-                    label="中优先级"
-                    :value="2"
-                  />
-
-                  <el-option
-                    label="低优先级"
-                    :value="3"
-                  />
-                </el-select>
-
-                <el-button @click="loadData">
-                  <el-icon><Refresh /></el-icon>
-                  刷新
-                </el-button>
-              </div>
-            </div>
-
-            <el-table
-              v-loading="loading"
-              :data="filteredRequirements"
-              row-key="id"
-              class="requirements-table"
-              empty-text="暂无需求数据"
-            >
-              <el-table-column
-                label="需求信息"
-                min-width="330"
-              >
-                <template #default="{ row }">
-                  <div class="requirement-cell">
-                    <div class="requirement-avatar">
-                      {{ row.title.slice(0, 1) }}
-                    </div>
-
-                    <div class="requirement-text">
-                      <strong>{{ row.title }}</strong>
-                      <p>{{ row.content }}</p>
-                    </div>
-                  </div>
-                </template>
-              </el-table-column>
-
-              <el-table-column
-                label="需求编号"
-                width="135"
-              >
-                <template #default="{ row }">
-                  <span class="requirement-code">
-                    REQ-{{ String(row.id).padStart(4, '0') }}
-                  </span>
-                </template>
-              </el-table-column>
-
-              <el-table-column
-                label="优先级"
-                width="125"
-              >
-                <template #default="{ row }">
-                  <el-tag
-                    :type="getPriorityType(row.priority)"
-                    effect="light"
-                    round
-                  >
-                    {{ getPriorityLabel(row.priority) }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-
-              <el-table-column
-                label="分析状态"
-                width="125"
-              >
-                <template #default="{ row }">
-                  <span
-                    class="analysis-status"
-                    :class="{
-                      completed: analysisResultsByRequirement[row.id],
-                    }"
-                  >
-                    <span></span>
-                    {{
-                      analysisResultsByRequirement[row.id]
-                        ? '已分析'
-                        : '待分析'
-                    }}
-                  </span>
-                </template>
-              </el-table-column>
-
-              <el-table-column
-                label="操作"
-                width="180"
-                fixed="right"
-              >
-                <template #default="{ row }">
-                  <el-button
-                    link
-                    type="primary"
-                    @click="openDetailDrawer(row)"
-                  >
-                    <el-icon><View /></el-icon>
-                    查看
-                  </el-button>
-
-                  <el-button
-                    link
-                    type="primary"
-                    :loading="analyzingRequirementId === row.id"
-                    @click="runAnalysis(row)"
-                  >
-                    <el-icon><MagicStick /></el-icon>
-                    分析
-                  </el-button>
-                </template>
-              </el-table-column>
-            </el-table>
-          </article>
-
-          <aside class="agent-panel">
-            <div class="agent-heading">
-              <div class="agent-logo">
-                <el-icon><MagicStick /></el-icon>
-              </div>
-
-              <div>
-                <h3>Agent 分析流程</h3>
-                <p>当前已配置 3 个分析工具</p>
-              </div>
-            </div>
-
-            <div class="agent-steps">
-              <div class="agent-step">
-                <div class="step-number">1</div>
-
-                <div>
-                  <strong>选择分析工具</strong>
-                  <p>Planner 根据需求内容制定工具执行计划。</p>
-                </div>
-              </div>
-
-              <div class="step-line"></div>
-
-              <div class="agent-step">
-                <div class="step-number">2</div>
-
-                <div>
-                  <strong>执行需求检查</strong>
-                  <p>依次完成完整性、歧义和优先级分析。</p>
-                </div>
-              </div>
-
-              <div class="step-line"></div>
-
-              <div class="agent-step">
-                <div class="step-number">3</div>
-
-                <div>
-                  <strong>生成分析报告</strong>
-                  <p>汇总工具结果并输出结构化最终报告。</p>
-                </div>
-              </div>
-            </div>
-
-            <div class="tool-list">
-              <div class="tool-item">
-                <el-icon><CircleCheckFilled /></el-icon>
-                完整性检查
-              </div>
-
-              <div class="tool-item">
-                <el-icon><CircleCheckFilled /></el-icon>
-                歧义检测
-              </div>
-
-              <div class="tool-item">
-                <el-icon><CircleCheckFilled /></el-icon>
-                优先级建议
-              </div>
-            </div>
-
-            <el-button
-              type="primary"
-              class="start-button"
-              @click="showPendingMessage('批量 Agent 分析')"
-            >
-              启动 Agent 分析
-              <el-icon><ArrowRight /></el-icon>
-            </el-button>
-          </aside>
-        </section>
+          <RequirementsView
+            :requirements="requirements"
+            :loading="loading"
+            :backend-healthy="backendHealthy"
+            :analysis-results-by-requirement="
+              analysisResultsByRequirement
+            "
+            :analyzing-requirement-id="
+              analyzingRequirementId
+            "
+            @open-create="openCreateDialog"
+            @refresh="loadData"
+            @open-detail="openDetailDrawer"
+            @analyze="runAnalysis"
+            @pending="showPendingMessage"
+          />
         </template>
 
         <template v-else-if="activeMenu === 'history'">
