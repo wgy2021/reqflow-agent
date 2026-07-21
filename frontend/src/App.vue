@@ -494,8 +494,15 @@ async function runAnalysis(requirement) {
 
   try {
     const result = await requestRequirementAnalysis(
-      requirement.id,
-    )
+  requirement.id,
+  {
+    forceRefresh: Boolean(
+      analysisResultsByRequirement.value[
+        requirement.id
+      ],
+    ),
+  },
+)
 
     analysisResult.value = result
     analysisResultsByRequirement.value = {

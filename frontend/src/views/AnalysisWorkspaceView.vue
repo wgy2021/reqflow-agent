@@ -117,6 +117,16 @@ function getToolLabel(toolName) {
   return labels[toolName] ?? toolName
 }
 
+function formatKnowledgeScore(score) {
+  const numericScore = Number(score)
+
+  if (!Number.isFinite(numericScore)) {
+    return '--'
+  }
+
+  return `${(numericScore * 100).toFixed(1)}%`
+}
+
 function startAnalysis() {
   if (!selectedRequirement.value) {
     return
@@ -402,6 +412,66 @@ function startAnalysis() {
           </strong>
         </article>
       </section>
+
+      <section
+  v-if="
+    selectedAnalysis.knowledge_references?.length
+  "
+  class="result-section"
+>
+  <div class="result-section-heading">
+    <h4>知识依据</h4>
+
+    <el-tag
+      type="success"
+      effect="plain"
+      size="small"
+    >
+      {{
+        selectedAnalysis.knowledge_references.length
+      }}
+      条引用
+    </el-tag>
+  </div>
+
+  <div class="knowledge-list">
+    <article
+      v-for="reference in
+        selectedAnalysis.knowledge_references"
+      :key="
+        `${reference.document_id}-${reference.chunk_id}`
+      "
+      class="knowledge-card"
+    >
+      <header>
+        <div>
+          <strong>
+            {{ reference.document_title }}
+          </strong>
+
+          <span>
+            {{
+              reference.source || '未标注来源'
+            }}
+          </span>
+        </div>
+
+        <el-tag
+          type="success"
+          effect="light"
+          size="small"
+        >
+          相似度
+          {{ formatKnowledgeScore(reference.score) }}
+        </el-tag>
+      </header>
+
+      <p>
+        {{ reference.content }}
+      </p>
+    </article>
+  </div>
+</section>
 
       <section class="result-section">
         <h4>执行工具</h4>
@@ -721,6 +791,64 @@ function startAnalysis() {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.result-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.result-section-heading h4 {
+  margin: 0;
+}
+
+.knowledge-list {
+  display: grid;
+  gap: 10px;
+}
+
+.knowledge-card {
+  padding: 14px 16px;
+  border: 1px solid #e5e6eb;
+  background: #f7f8fa;
+}
+
+.knowledge-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.knowledge-card header > div {
+  min-width: 0;
+}
+
+.knowledge-card strong {
+  display: block;
+  color: #1d2129;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.knowledge-card span {
+  display: block;
+  margin-top: 5px;
+  color: #86909c;
+  font-size: 11px;
+  word-break: break-all;
+}
+
+.knowledge-card p {
+  margin: 12px 0 0;
+  color: #4e5969;
+  font-size: 12px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .final-report {
