@@ -6,6 +6,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  systemInfo: {
+    type: Object,
+    default: null,
+  },
   requirements: {
     type: Array,
     default: () => [],
@@ -36,16 +40,49 @@ const coverageRate = computed(() => {
   )
 })
 
+const providerLabel = computed(() => {
+  return props.systemInfo?.llm_provider ?? '未获取'
+})
+
+const modelLabel = computed(() => {
+  return props.systemInfo?.llm_model ?? '未配置'
+})
+
+const environmentLabel = computed(() => {
+  return props.systemInfo?.environment ?? '未获取'
+})
+
+const serviceVersion = computed(() => {
+  return props.systemInfo?.version ?? '--'
+})
+
+const databaseLabel = computed(() => {
+  const databaseType =
+    props.systemInfo?.database_type ?? '未获取'
+
+  return databaseType === 'sqlite'
+    ? 'SQLite'
+    : databaseType
+})
+
+const cacheVersion = computed(() => {
+  return props.systemInfo?.cache_version ?? '--'
+})
+
+const registeredToolCount = computed(() => {
+  return props.systemInfo?.tool_count ?? 0
+})
+
 const serviceItems = computed(() => [
   {
     name: 'FastAPI 服务',
-    description: '需求 CRUD、Agent 分析与历史查询接口',
+    description: `ReqFlow Agent ${serviceVersion.value}`,
     status: props.backendHealthy ? '运行正常' : '连接异常',
     healthy: props.backendHealthy,
     icon: 'api',
   },
   {
-    name: 'SQLite 数据库',
+    name: `${databaseLabel.value} 数据库`,
     description: '通过 SQLAlchemy 与 Alembic 管理数据结构',
     status: props.backendHealthy ? '可访问' : '待检查',
     healthy: props.backendHealthy,
@@ -53,9 +90,9 @@ const serviceItems = computed(() => [
   },
   {
     name: 'Agent 工具注册中心',
-    description: '当前已注册 3 个结构化分析工具',
-    status: '3 个工具',
-    healthy: true,
+    description: '由后端 Tool Registry 返回真实注册信息',
+    status: `${registeredToolCount.value} 个工具`,
+    healthy: props.backendHealthy,
     icon: 'tools',
   },
   {
@@ -67,23 +104,33 @@ const serviceItems = computed(() => [
   },
 ])
 
-const toolItems = [
-  {
-    name: 'completeness_check',
+const toolMetadata = {
+  completeness_check: {
     label: '完整性检查',
     description: '检查标题、内容和优先级等必要字段。',
   },
-  {
-    name: 'ambiguity_check',
+  ambiguity_check: {
     label: '歧义检测',
     description: '识别模糊词、范围不清和验收条件缺失。',
   },
-  {
-    name: 'priority_suggestion',
+  priority_suggestion: {
     label: '优先级建议',
     description: '根据需求影响范围建议处理优先级。',
   },
-]
+}
+
+const toolItems = computed(() => {
+  const toolNames = props.systemInfo?.tools ?? []
+
+  return toolNames.map((name) => ({
+    name,
+    label: toolMetadata[name]?.label ?? name,
+    description:
+      toolMetadata[name]?.description ??
+      '由后端 Tool Registry 注册的 Agent 工具。',
+  }))
+})
+
 </script>
 
 <template>
@@ -200,17 +247,22 @@ const toolItems = [
       <div class="config-list">
         <div class="config-row">
           <span>LLM Provider</span>
-          <strong>由 LLM_PROVIDER 控制</strong>
-        </div>
-
-        <div class="config-row">
-          <span>API Base URL</span>
-          <strong>由后端环境变量管理</strong>
+          <strong>{{ providerLabel }}</strong>
         </div>
 
         <div class="config-row">
           <span>模型名称</span>
-          <strong>由后端配置读取</strong>
+          <strong>{{ modelLabel }}</strong>
+        </div>
+
+        <div class="config-row">
+          <span>运行环境</span>
+          <strong>{{ environmentLabel }}</strong>
+        </div>
+
+        <div class="config-row">
+          <span>服务版本</span>
+          <strong>{{ serviceVersion }}</strong>
         </div>
 
         <div class="config-row">
@@ -279,7 +331,9 @@ const toolItems = [
           <el-icon><Lock /></el-icon>
 
           <div>
-            <strong>内容指纹缓存</strong>
+            <strong>
+              内容指纹缓存（{{ cacheVersion }}）
+            </strong>
             <p>
               根据标题、内容、优先级和版本生成 SHA-256 指纹。
             </p>
@@ -341,8 +395,8 @@ const toolItems = [
         </div>
 
         <div>
-          <span>数据库迁移</span>
-          <strong>Alembic</strong>
+          <span>数据库</span>
+          <strong>{{ databaseLabel }} + Alembic</strong>
         </div>
 
         <div>
@@ -351,8 +405,8 @@ const toolItems = [
         </div>
 
         <div>
-          <span>测试框架</span>
-          <strong>pytest</strong>
+          <span>缓存版本</span>
+          <strong>{{ cacheVersion }}</strong>
         </div>
 
         <div>

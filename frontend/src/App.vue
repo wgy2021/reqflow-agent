@@ -11,13 +11,17 @@ import {
   removeRequirement,
   updateRequirement as requestUpdateRequirement,
 } from './api/requirements'
-import { getSystemHealth } from './api/system'
+import {
+  getSystemHealth,
+  getSystemInfo,
+} from './api/system'
 const route = useRoute()
 const router = useRouter()
 
 const requirements = ref([])
 const loading = ref(false)
 const backendHealthy = ref(false)
+const systemInfo = ref(null)
 
 const activeMenu = computed(() => route.name ?? 'requirements')
 const createDialogVisible = ref(false)
@@ -292,8 +296,13 @@ async function loadData() {
   loading.value = true
 
   try {
-    const [healthData, requirementsData] = await Promise.all([
+    const [
+      healthData,
+      systemInfoData,
+      requirementsData,
+    ] = await Promise.all([
       getSystemHealth(),
+      getSystemInfo(),
       listRequirements({
         limit: 100,
         offset: 0,
@@ -301,11 +310,13 @@ async function loadData() {
     ])
 
     backendHealthy.value = healthData.status === 'ok'
+    systemInfo.value = systemInfoData
     requirements.value = requirementsData
 
     await loadLatestAnalysisStatuses(requirementsData)
   } catch (error) {
     backendHealthy.value = false
+    systemInfo.value = null
 
     ElMessage.error('数据加载失败，请检查后端容器是否正常运行。')
     console.error(error)
@@ -702,6 +713,7 @@ onMounted(async () => {
             :is="Component"
             v-else-if="currentRoute.name === 'settings'"
             :backend-healthy="backendHealthy"
+            :system-info="systemInfo"
             :requirements="requirements"
             :analysis-results-by-requirement="
               analysisResultsByRequirement

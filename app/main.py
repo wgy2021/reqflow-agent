@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
 from app.routers.requirements import router as requirements_router
-
+from app.routers.system import router as system_router
 
 
 app = FastAPI(
@@ -11,11 +11,12 @@ app = FastAPI(
 
 
 app.include_router(requirements_router)
+app.include_router(system_router)
 
 
 @app.get(
     "/health",
-    tags=["system"],
+    tags=["system.py"],
 )
 def health_check() -> dict[str, str]:
     return {

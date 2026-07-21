@@ -43,3 +43,18 @@ class RequirementResponse(BaseModel):
     title: str
     content: str
     priority: int
+
+class SystemInfoResponse(BaseModel):
+    service: str
+    version: str
+    environment: str
+
+    llm_provider: str
+    llm_model: str | None
+
+    database_type: str
+
+    tool_count: int
+    tools: list[str]
+
+    cache_version: str

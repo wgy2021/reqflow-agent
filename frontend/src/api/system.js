@@ -15,3 +15,6 @@ async function requestJson(url, options = {}) {
 export function getSystemHealth() {
   return requestJson(`${SYSTEM_API}/health`)
 }
+export function getSystemInfo() {
+  return requestJson(`${SYSTEM_API}/system/info`)
+}
