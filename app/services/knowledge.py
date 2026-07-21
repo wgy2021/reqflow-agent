@@ -5,13 +5,17 @@ from sqlalchemy.orm import Session
 from app.agent.embeddings import (
     EmbeddingClient,
     LocalHashEmbeddingClient,
+    cosine_similarity,
 )
 
 from app.models import (
     KnowledgeChunk,
     KnowledgeDocument,
 )
-from app.schemas import KnowledgeDocumentCreate
+from app.schemas import (
+    KnowledgeDocumentCreate,
+    KnowledgeSearchResult,
+)
 
 
 DEFAULT_CHUNK_SIZE = 500
@@ -181,3 +185,88 @@ def list_document_chunks(
     return list(
         db.scalars(statement).all()
     )
+
+def search_knowledge_chunks(
+    db: Session,
+    query: str,
+    top_k: int = 5,
+    min_score: float = 0.0,
+    embedding_client: EmbeddingClient | None = None,
+) -> list[KnowledgeSearchResult]:
+    """按照余弦相似度检索最相关的知识片段。"""
+
+    normalized_query = normalize_text(query)
+
+    if not normalized_query:
+        raise ValueError("检索内容不能为空")
+
+    if top_k <= 0:
+        raise ValueError("top_k 必须大于 0")
+
+    if not -1.0 <= min_score <= 1.0:
+        raise ValueError(
+            "min_score 必须在 -1 到 1 之间"
+        )
+
+    if embedding_client is None:
+        embedding_client = LocalHashEmbeddingClient()
+
+    query_embedding = embedding_client.embed_texts(
+        [
+            normalized_query,
+        ]
+    )[0]
+
+    statement = (
+        select(
+            KnowledgeChunk,
+            KnowledgeDocument,
+        )
+        .join(
+            KnowledgeDocument,
+            KnowledgeChunk.document_id
+            == KnowledgeDocument.id,
+        )
+    )
+
+    search_results: list[
+        KnowledgeSearchResult
+    ] = []
+
+    for chunk, document in db.execute(
+        statement
+    ).all():
+        if chunk.embedding is None:
+            continue
+
+        if len(chunk.embedding) != len(
+            query_embedding
+        ):
+            continue
+
+        score = cosine_similarity(
+            query_embedding,
+            chunk.embedding,
+        )
+
+        if score < min_score:
+            continue
+
+        search_results.append(
+            KnowledgeSearchResult(
+                chunk_id=chunk.id,
+                document_id=document.id,
+                document_title=document.title,
+                source=document.source,
+                chunk_index=chunk.chunk_index,
+                content=chunk.content,
+                score=score,
+            )
+        )
+
+    search_results.sort(
+        key=lambda result: result.score,
+        reverse=True,
+    )
+
+    return search_results[:top_k]

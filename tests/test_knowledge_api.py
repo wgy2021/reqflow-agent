@@ -185,3 +185,67 @@ def test_missing_document_returns_404(
     assert chunks_response.json() == {
         "detail": "Knowledge document not found",
     }
+
+def test_search_returns_most_related_document(
+    client: TestClient,
+) -> None:
+    login_response = client.post(
+        "/knowledge/documents",
+        json={
+            "title": "登录安全规范",
+            "content": "用户登录密码安全校验",
+            "source": "security.md",
+        },
+    )
+
+    inventory_response = client.post(
+        "/knowledge/documents",
+        json={
+            "title": "库存管理规范",
+            "content": "商品库存不足时发送补货提醒",
+            "source": "inventory.md",
+        },
+    )
+
+    assert login_response.status_code == 201
+    assert inventory_response.status_code == 201
+
+    response = client.get(
+        "/knowledge/search",
+        params={
+            "query": "用户登录密码安全校验",
+            "top_k": 1,
+        },
+    )
+
+    assert response.status_code == 200
+
+    results = response.json()
+
+    assert len(results) == 1
+    assert results[0]["document_title"] == (
+        "登录安全规范"
+    )
+    assert results[0]["source"] == "security.md"
+    assert results[0]["content"] == (
+        "用户登录密码安全校验"
+    )
+    assert results[0]["score"] == pytest.approx(
+        1.0
+    )
+
+
+def test_search_whitespace_query_returns_422(
+    client: TestClient,
+) -> None:
+    response = client.get(
+        "/knowledge/search",
+        params={
+            "query": "   ",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": "检索内容不能为空",
+    }

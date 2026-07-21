@@ -105,3 +105,14 @@ class KnowledgeChunkResponse(BaseModel):
     chunk_index: int
     content: str
     created_at: datetime
+
+class KnowledgeSearchResult(BaseModel):
+    """知识库语义检索结果。"""
+
+    chunk_id: int
+    document_id: int
+    document_title: str
+    source: str | None
+    chunk_index: int
+    content: str
+    score: float

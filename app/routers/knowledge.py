@@ -16,6 +16,7 @@ from app.schemas import (
     KnowledgeChunkResponse,
     KnowledgeDocumentCreate,
     KnowledgeDocumentResponse,
+    KnowledgeSearchResult,
 )
 from app.services import knowledge as knowledge_service
 
@@ -48,6 +49,42 @@ def create_knowledge_document(
             detail=str(exc),
         ) from exc
 
+
+@router.get(
+    "/search",
+    response_model=list[KnowledgeSearchResult],
+)
+def search_knowledge(
+    query: str = Query(
+        min_length=1,
+        max_length=1000,
+    ),
+    top_k: int = Query(
+        default=5,
+        ge=1,
+        le=20,
+    ),
+    min_score: float = Query(
+        default=0.0,
+        ge=-1.0,
+        le=1.0,
+    ),
+    db: Session = Depends(get_db),
+) -> list[KnowledgeSearchResult]:
+    """按照语义相似度检索知识片段。"""
+
+    try:
+        return knowledge_service.search_knowledge_chunks(
+            db=db,
+            query=query,
+            top_k=top_k,
+            min_score=min_score,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
 
 @router.get(
     "/documents",
