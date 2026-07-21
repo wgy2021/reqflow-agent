@@ -1,6 +1,10 @@
 from datetime import datetime
 
+from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict, Field
+
+from app.schemas import KnowledgeSearchResult
 
 class CompletenessToolResult(BaseModel):
     tool: str
@@ -42,6 +46,11 @@ class RequirementAnalysisResponse(BaseModel):
     priority_consistent: bool | None
     issues: list[str]
     tool_results: RequirementToolResults
+    knowledge_references: list[
+        KnowledgeSearchResult
+    ] = Field(
+        default_factory=list,
+    )
     final_report: str
     llm_fallback_used: bool
     llm_error: str | None

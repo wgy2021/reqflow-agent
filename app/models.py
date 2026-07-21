@@ -89,6 +89,14 @@ class RequirementAnalysis(Base):
         JSON,
         nullable=False,
     )
+    knowledge_references: Mapped[
+        list[dict[str, Any]]
+    ] = mapped_column(
+        JSON,
+        nullable=False,
+        default=list,
+        server_default="[]",
+    )
 
     final_report: Mapped[str] = mapped_column(
         Text,

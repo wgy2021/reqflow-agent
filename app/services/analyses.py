@@ -87,6 +87,10 @@ def create_analysis(
         ],
         issues=analysis_result["issues"],
         tool_results=analysis_result["tool_results"],
+        knowledge_references=analysis_result.get(
+            "knowledge_references",
+            [],
+        ),
         final_report=analysis_result["final_report"],
         llm_fallback_used=analysis_result[
             "llm_fallback_used"
@@ -136,6 +140,9 @@ def analysis_to_result(
         "priority_consistent": analysis.priority_consistent,
         "issues": analysis.issues,
         "tool_results": analysis.tool_results,
+        "knowledge_references": (
+            analysis.knowledge_references
+        ),
         "final_report": analysis.final_report,
         "llm_fallback_used": analysis.llm_fallback_used,
         "llm_error": analysis.llm_error,

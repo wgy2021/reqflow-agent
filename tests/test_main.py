@@ -697,3 +697,83 @@ def test_rag_context_change_invalidates_analysis_cache(
     assert third_response.json()["final_report"] == (
         "使用知识上下文：知识上下文 B"
     )
+
+def test_analysis_returns_and_persists_knowledge_references(
+) -> None:
+    document_response = client.post(
+        "/knowledge/documents",
+        json={
+            "title": "登录安全规范",
+            "content": (
+                "用户登录必须校验用户名和密码，"
+                "密码必须使用哈希算法加盐保存。"
+            ),
+            "source": "rag-test.md",
+        },
+    )
+
+    assert document_response.status_code == 201
+
+    requirement_response = client.post(
+        "/requirements",
+        json={
+            "title": "用户登录安全控制",
+            "content": (
+                "用户登录必须校验用户名和密码，"
+                "密码必须使用哈希算法加盐保存。"
+            ),
+            "priority": 1,
+        },
+    )
+
+    assert requirement_response.status_code == 201
+
+    requirement_id = requirement_response.json()["id"]
+
+    first_response = client.post(
+        (
+            f"/requirements/{requirement_id}/analyze"
+            "?force_refresh=true"
+        )
+    )
+
+    assert first_response.status_code == 200
+
+    first_result = first_response.json()
+    references = first_result[
+        "knowledge_references"
+    ]
+
+    assert first_result["cache_hit"] is False
+    assert len(references) == 1
+
+    assert references[0]["document_title"] == (
+        "登录安全规范"
+    )
+    assert references[0]["source"] == "rag-test.md"
+    assert references[0]["score"] > 0
+
+    cached_response = client.post(
+        f"/requirements/{requirement_id}/analyze"
+    )
+
+    assert cached_response.status_code == 200
+    assert cached_response.json()["cache_hit"] is True
+
+    assert (
+        cached_response.json()["knowledge_references"]
+        == references
+    )
+
+    history_response = client.get(
+        f"/requirements/{requirement_id}/analyses"
+    )
+
+    assert history_response.status_code == 200
+
+    history = history_response.json()
+
+    assert len(history) == 1
+    assert history[0]["knowledge_references"] == (
+        references
+    )

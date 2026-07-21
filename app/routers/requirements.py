@@ -195,6 +195,11 @@ def analyze_requirement_endpoint(
         knowledge_context=knowledge_context,
     )
 
+    analysis_result["knowledge_references"] = [
+        result.model_dump()
+        for result in knowledge_results
+    ]
+
     analysis_result["cache_hit"] = False
 
     analysis_service.create_analysis(
