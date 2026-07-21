@@ -685,6 +685,21 @@ onMounted(async () => {
 
           <component
             :is="Component"
+            v-else-if="currentRoute.name === 'analysis'"
+            :requirements="requirements"
+            :backend-healthy="backendHealthy"
+            :analysis-results-by-requirement="
+              analysisResultsByRequirement
+            "
+            :analyzing-requirement-id="
+              analyzingRequirementId
+            "
+            @open-detail="openDetailDrawer"
+            @analyze="runAnalysis"
+          />
+
+          <component
+            :is="Component"
             v-else
           />
         </RouterView>
