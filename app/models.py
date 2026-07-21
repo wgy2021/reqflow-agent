@@ -130,3 +130,74 @@ class RequirementAnalysisCache(Base):
         ForeignKey("requirement_analyses.id"),
         nullable=False,
     )
+
+class KnowledgeDocument(Base):
+    """知识库中的原始文档。"""
+
+    __tablename__ = "knowledge_documents"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    title: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+    )
+
+    content: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    source: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
+class KnowledgeChunk(Base):
+    """文档切分后用于检索的知识片段。"""
+
+    __tablename__ = "knowledge_chunks"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        index=True,
+    )
+
+    document_id: Mapped[int] = mapped_column(
+        ForeignKey("knowledge_documents.id"),
+        nullable=False,
+        index=True,
+    )
+
+    chunk_index: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    content: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    embedding: Mapped[list[float] | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+    )
