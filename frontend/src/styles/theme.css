@@ -1,0 +1,213 @@
+:root {
+  color-scheme: light;
+
+  /* Brand */
+  --rf-primary: #0F766E;
+  --rf-primary-hover: #115E59;
+  --rf-primary-active: #134E4A;
+  --rf-primary-light: #F0FDFA;
+  --rf-primary-border: #99F6E4;
+
+  /* Text */
+  --rf-text-primary: #172033;
+  --rf-text-secondary: #5F6B68;
+  --rf-text-tertiary: #8A9691;
+  --rf-text-disabled: #B5BDB9;
+
+  /* Surfaces */
+  --rf-bg-page: #F6F7F4;
+  --rf-bg-card: #ffffff;
+  --rf-bg-subtle: #FAFBF9;
+  --rf-bg-muted: #F1F3F0;
+
+  /* Borders */
+  --rf-border: #E2E7E3;
+  --rf-border-light: #EDF1EE;
+  --rf-border-strong: #CCD5D0;
+
+  /* Semantic */
+  --rf-success: #15803d;
+  --rf-success-bg: #f0fdf4;
+  --rf-success-border: #bbf7d0;
+
+  --rf-warning: #b45309;
+  --rf-warning-bg: #fffbeb;
+  --rf-warning-border: #fde68a;
+
+  --rf-danger: #b42318;
+  --rf-danger-bg: #fef3f2;
+  --rf-danger-border: #fecdca;
+
+  /* Shape and elevation */
+  --rf-radius-small: 5px;
+  --rf-radius-medium: 8px;
+  --rf-radius-large: 10px;
+
+  --rf-shadow-card:
+    0 1px 2px rgb(16 24 40 / 4%),
+    0 2px 6px rgb(16 24 40 / 3%);
+
+  --rf-shadow-float:
+    0 10px 26px rgb(16 24 40 / 10%);
+
+  /* Element Plus */
+  --el-color-primary: #0F766E;
+  --el-color-primary-light-3: #3B9B92;
+  --el-color-primary-light-5: #73B8B1;
+  --el-color-primary-light-7: #A9D8D3;
+  --el-color-primary-light-8: #D5EEEA;
+  --el-color-primary-light-9: #F0FDFA;
+  --el-color-primary-dark-2: #115E59;
+
+  --el-color-success: #15803d;
+  --el-color-warning: #b45309;
+  --el-color-danger: #b42318;
+  --el-color-error: #b42318;
+
+  --el-text-color-primary: #172033;
+  --el-text-color-regular: #475854;
+  --el-text-color-secondary: #5F6B68;
+  --el-text-color-placeholder: #8A9691;
+
+  --el-border-color: #E2E7E3;
+  --el-border-color-light: #EDF1EE;
+  --el-border-color-lighter: #F1F3F0;
+  --el-fill-color-light: #FAFBF9;
+  --el-fill-color-lighter: #FCFCFA;
+  --el-bg-color-page: #F6F7F4;
+
+  --el-border-radius-base: 6px;
+  --el-border-radius-small: 4px;
+  --el-box-shadow-light: var(--rf-shadow-card);
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+}
+
+html {
+  background: var(--rf-bg-page);
+}
+
+body {
+  margin: 0;
+  color: var(--rf-text-primary);
+  background: var(--rf-bg-page);
+  font-family:
+    Inter,
+    "PingFang SC",
+    "Microsoft YaHei",
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+::selection {
+  color: #ffffff;
+  background: rgb(15 118 110 / 82%);
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: #C5CEC9;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94A19B;
+  background-clip: padding-box;
+}
+
+.el-button {
+  font-weight: 600;
+}
+
+.el-button--primary {
+  box-shadow: 0 1px 2px rgb(15 118 110 / 18%);
+}
+
+.el-card,
+.el-dialog,
+.el-drawer {
+  --el-border-color-light: var(--rf-border);
+}
+
+.el-dialog,
+.el-drawer {
+  box-shadow: var(--rf-shadow-float);
+}
+
+.el-input__wrapper,
+.el-select__wrapper,
+.el-textarea__inner {
+  box-shadow: 0 0 0 1px var(--rf-border) inset;
+}
+
+.el-input__wrapper:hover,
+.el-select__wrapper:hover,
+.el-textarea__inner:hover {
+  box-shadow: 0 0 0 1px var(--rf-border-strong) inset;
+}
+
+.el-table {
+  --el-table-border-color: var(--rf-border-light);
+  --el-table-header-bg-color: var(--rf-bg-subtle);
+  --el-table-row-hover-bg-color: #F4F9F7;
+}
+
+.el-tag {
+  font-weight: 600;
+}
+
+
+:root {
+  --rf-bg-page: #F6F7F4;
+  --rf-shadow-card:
+    0 1px 2px rgb(16 24 40 / 4%),
+    0 5px 16px rgb(16 24 40 / 5%);
+}
+
+html,
+body,
+#app {
+  background:
+    linear-gradient(
+      180deg,
+      #FBFCFA 0,
+      var(--rf-bg-page) 240px
+    );
+}
+
+body {
+  font-size: 15px;
+}
