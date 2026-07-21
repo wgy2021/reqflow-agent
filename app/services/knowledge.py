@@ -2,6 +2,10 @@
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from app.agent.embeddings import (
+    EmbeddingClient,
+    LocalHashEmbeddingClient,
+)
 
 from app.models import (
     KnowledgeChunk,
@@ -75,6 +79,7 @@ def create_document(
     document: KnowledgeDocumentCreate,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
     overlap: int = DEFAULT_CHUNK_OVERLAP,
+    embedding_client: EmbeddingClient | None = None,
 ) -> KnowledgeDocument:
     """保存知识文档，并自动生成知识片段。"""
 
@@ -86,6 +91,14 @@ def create_document(
 
     if not chunks:
         raise ValueError("文档内容清理后不能为空")
+
+    if embedding_client is None:
+        embedding_client = LocalHashEmbeddingClient()
+
+    embeddings = embedding_client.embed_texts(chunks)
+
+    if len(embeddings) != len(chunks):
+        raise ValueError("向量数量与知识片段数量不一致")
 
     db_document = KnowledgeDocument(
         title=document.title,
@@ -104,7 +117,7 @@ def create_document(
                 document_id=db_document.id,
                 chunk_index=index,
                 content=chunk,
-                embedding=None,
+                embedding=embeddings[index],
             )
             for index, chunk in enumerate(chunks)
         ]

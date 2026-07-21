@@ -6,6 +6,7 @@ from sqlalchemy.orm import (
 )
 from sqlalchemy.pool import StaticPool
 
+from app.agent.embeddings import LocalHashEmbeddingClient
 from app.database import Base
 from app.models import (
     KnowledgeChunk,
@@ -58,6 +59,9 @@ def test_create_document_generates_chunks(
         document=document,
         chunk_size=6,
         overlap=2,
+        embedding_client=LocalHashEmbeddingClient(
+            dimension=8,
+        ),
     )
 
     chunks = list_document_chunks(
@@ -84,6 +88,17 @@ def test_create_document_generates_chunks(
         "ABCDEF",
         "EFGHIJ",
     ]
+
+    assert all(
+        chunk.embedding is not None
+        for chunk in chunks
+    )
+
+    assert all(
+        len(chunk.embedding) == 8
+        for chunk in chunks
+        if chunk.embedding is not None
+    )
 
 
 def test_list_and_get_documents(
