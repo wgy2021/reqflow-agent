@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import {
@@ -11,14 +12,14 @@ import {
   updateRequirement as requestUpdateRequirement,
 } from './api/requirements'
 import { getSystemHealth } from './api/system'
-import AnalysisHistoryView from './views/AnalysisHistoryView.vue'
-import RequirementsView from './views/RequirementsView.vue'
+const route = useRoute()
+const router = useRouter()
 
 const requirements = ref([])
 const loading = ref(false)
 const backendHealthy = ref(false)
 
-const activeMenu = ref('requirements')
+const activeMenu = computed(() => route.name ?? 'requirements')
 const createDialogVisible = ref(false)
 const createSubmitting = ref(false)
 const createFormRef = ref()
@@ -93,16 +94,38 @@ const createRules = {
   ],
 }
 
+const pageMeta = {
+  dashboard: {
+    title: '工作台',
+    breadcrumb: '工作空间 / 工作台',
+  },
+  requirements: {
+    title: '需求管理',
+    breadcrumb: '工作空间 / 需求管理',
+  },
+  analysis: {
+    title: '智能分析',
+    breadcrumb: '工作空间 / 智能分析',
+  },
+  history: {
+    title: '分析历史',
+    breadcrumb: '工作空间 / 分析历史',
+  },
+  settings: {
+    title: '系统设置',
+    breadcrumb: '系统 / 系统设置',
+  },
+}
+
 const currentPageTitle = computed(() => {
-  return activeMenu.value === 'history'
-    ? '分析历史'
-    : '需求管理'
+  return pageMeta[activeMenu.value]?.title ?? 'ReqFlow Agent'
 })
 
 const currentBreadcrumb = computed(() => {
-  return activeMenu.value === 'history'
-    ? '工作空间 / 分析历史'
-    : '工作空间 / 需求管理'
+  return (
+    pageMeta[activeMenu.value]?.breadcrumb ??
+    '工作空间'
+  )
 })
 
 const selectedHistoryRequirement = computed(() => {
@@ -182,35 +205,36 @@ async function loadRequirementHistory(requirementId) {
   }
 }
 
+async function prepareHistoryPage() {
+  const firstAnalyzedRequirement = requirements.value.find(
+    (item) => analysisResultsByRequirement.value[item.id],
+  )
+
+  const fallbackRequirement = requirements.value[0]
+
+  selectedHistoryRequirementId.value =
+    selectedHistoryRequirementId.value ??
+    firstAnalyzedRequirement?.id ??
+    fallbackRequirement?.id ??
+    null
+
+  await loadRequirementHistory(
+    selectedHistoryRequirementId.value,
+  )
+}
+
 async function handleMenuSelect(index) {
-  if (index === 'requirements') {
-    activeMenu.value = 'requirements'
+  if (index === activeMenu.value) {
     return
   }
+
+  await router.push({
+    name: index,
+  })
 
   if (index === 'history') {
-    activeMenu.value = 'history'
-
-    const firstAnalyzedRequirement = requirements.value.find(
-      (item) => analysisResultsByRequirement.value[item.id],
-    )
-
-    const fallbackRequirement = requirements.value[0]
-
-    selectedHistoryRequirementId.value =
-      selectedHistoryRequirementId.value ??
-      firstAnalyzedRequirement?.id ??
-      fallbackRequirement?.id ??
-      null
-
-    await loadRequirementHistory(
-      selectedHistoryRequirementId.value,
-    )
-
-    return
+    await prepareHistoryPage()
   }
-
-  ElMessage.info('该页面将在后续版本接入。')
 }
 
 async function handleHistoryRequirementChange(requirementId) {
@@ -507,7 +531,13 @@ async function submitRequirement() {
   }
 }
 
-onMounted(loadData)
+onMounted(async () => {
+  await loadData()
+
+  if (route.name === 'history') {
+    await prepareHistoryPage()
+  }
+})
 </script>
 
 <template>
@@ -599,8 +629,10 @@ onMounted(loadData)
       </el-header>
 
       <el-main class="main-content">
-        <template v-if="activeMenu === 'requirements'">
-          <RequirementsView
+        <RouterView v-slot="{ Component, route: currentRoute }">
+          <component
+            :is="Component"
+            v-if="currentRoute.name === 'requirements'"
             :requirements="requirements"
             :loading="loading"
             :backend-healthy="backendHealthy"
@@ -616,10 +648,10 @@ onMounted(loadData)
             @analyze="runAnalysis"
             @pending="showPendingMessage"
           />
-        </template>
 
-        <template v-else-if="activeMenu === 'history'">
-          <AnalysisHistoryView
+          <component
+            :is="Component"
+            v-else-if="currentRoute.name === 'history'"
             v-model:selected-requirement-id="
               selectedHistoryRequirementId
             "
@@ -634,7 +666,12 @@ onMounted(loadData)
             @change="handleHistoryRequirementChange"
             @open-record="openHistoryRecord"
           />
-        </template>
+
+          <component
+            :is="Component"
+            v-else
+          />
+        </RouterView>
       </el-main>
     </el-container>
 
