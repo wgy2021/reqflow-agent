@@ -700,6 +700,16 @@ onMounted(async () => {
 
           <component
             :is="Component"
+            v-else-if="currentRoute.name === 'settings'"
+            :backend-healthy="backendHealthy"
+            :requirements="requirements"
+            :analysis-results-by-requirement="
+              analysisResultsByRequirement
+            "
+          />
+
+          <component
+            :is="Component"
             v-else
           />
         </RouterView>
