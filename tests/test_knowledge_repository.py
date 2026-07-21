@@ -18,6 +18,7 @@ from app.services.knowledge import (
     get_document,
     list_document_chunks,
     list_documents,
+    reindex_knowledge_chunks,
 )
 
 
@@ -169,3 +170,61 @@ def test_create_empty_document_rolls_back(
 
     assert documents == []
     assert chunks == []
+
+
+def test_reindex_fills_missing_embeddings(
+    db: Session,
+) -> None:
+    document = KnowledgeDocument(
+        title="旧知识文档",
+        content="旧知识片段内容",
+        source="legacy.md",
+    )
+
+    db.add(document)
+    db.flush()
+
+    missing_chunk = KnowledgeChunk(
+        document_id=document.id,
+        chunk_index=0,
+        content="用户登录需要校验密码",
+        embedding=None,
+    )
+
+    indexed_chunk = KnowledgeChunk(
+        document_id=document.id,
+        chunk_index=1,
+        content="已经完成向量化",
+        embedding=[
+            1.0,
+            0.0,
+        ],
+    )
+
+    db.add_all([
+        missing_chunk,
+        indexed_chunk,
+    ])
+    db.commit()
+
+    result = reindex_knowledge_chunks(
+        db=db,
+        embedding_client=LocalHashEmbeddingClient(
+            dimension=8,
+        ),
+    )
+
+    db.refresh(missing_chunk)
+    db.refresh(indexed_chunk)
+
+    assert result.total_chunks == 2
+    assert result.updated_chunks == 1
+    assert result.skipped_chunks == 1
+
+    assert missing_chunk.embedding is not None
+    assert len(missing_chunk.embedding) == 8
+
+    assert indexed_chunk.embedding == [
+        1.0,
+        0.0,
+    ]

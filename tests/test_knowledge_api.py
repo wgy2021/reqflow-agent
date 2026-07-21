@@ -249,3 +249,29 @@ def test_search_whitespace_query_returns_422(
     assert response.json() == {
         "detail": "检索内容不能为空",
     }
+
+
+def test_reindex_skips_already_indexed_chunks(
+    client: TestClient,
+) -> None:
+    create_response = client.post(
+        "/knowledge/documents",
+        json={
+            "title": "新知识文档",
+            "content": "新文档会自动生成向量",
+            "source": "new.md",
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    response = client.post(
+        "/knowledge/reindex"
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "total_chunks": 1,
+        "updated_chunks": 0,
+        "skipped_chunks": 1,
+    }

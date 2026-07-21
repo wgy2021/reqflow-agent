@@ -116,3 +116,10 @@ class KnowledgeSearchResult(BaseModel):
     chunk_index: int
     content: str
     score: float
+
+class KnowledgeReindexResponse(BaseModel):
+    """知识库重新索引结果。"""
+
+    total_chunks: int
+    updated_chunks: int
+    skipped_chunks: int

@@ -14,6 +14,7 @@ from app.models import (
 )
 from app.schemas import (
     KnowledgeDocumentCreate,
+    KnowledgeReindexResponse,
     KnowledgeSearchResult,
 )
 
@@ -270,3 +271,67 @@ def search_knowledge_chunks(
     )
 
     return search_results[:top_k]
+
+def reindex_knowledge_chunks(
+    db: Session,
+    embedding_client: EmbeddingClient | None = None,
+) -> KnowledgeReindexResponse:
+    """为缺少向量的旧知识片段补充 embedding。"""
+
+    chunks = list(
+        db.scalars(
+            select(KnowledgeChunk).order_by(
+                KnowledgeChunk.id.asc()
+            )
+        ).all()
+    )
+
+    pending_chunks = [
+        chunk
+        for chunk in chunks
+        if chunk.embedding is None
+    ]
+
+    if not pending_chunks:
+        return KnowledgeReindexResponse(
+            total_chunks=len(chunks),
+            updated_chunks=0,
+            skipped_chunks=len(chunks),
+        )
+
+    if embedding_client is None:
+        embedding_client = LocalHashEmbeddingClient()
+
+    embeddings = embedding_client.embed_texts(
+        [
+            chunk.content
+            for chunk in pending_chunks
+        ]
+    )
+
+    if len(embeddings) != len(pending_chunks):
+        raise ValueError(
+            "向量数量与待索引片段数量不一致"
+        )
+
+    try:
+        for chunk, embedding in zip(
+            pending_chunks,
+            embeddings,
+            strict=True,
+        ):
+            chunk.embedding = embedding
+
+        db.commit()
+
+    except Exception:
+        db.rollback()
+        raise
+
+    return KnowledgeReindexResponse(
+        total_chunks=len(chunks),
+        updated_chunks=len(pending_chunks),
+        skipped_chunks=(
+            len(chunks) - len(pending_chunks)
+        ),
+    )

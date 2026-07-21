@@ -16,6 +16,7 @@ from app.schemas import (
     KnowledgeChunkResponse,
     KnowledgeDocumentCreate,
     KnowledgeDocumentResponse,
+    KnowledgeReindexResponse,
     KnowledgeSearchResult,
 )
 from app.services import knowledge as knowledge_service
@@ -49,6 +50,25 @@ def create_knowledge_document(
             detail=str(exc),
         ) from exc
 
+
+@router.post(
+    "/reindex",
+    response_model=KnowledgeReindexResponse,
+)
+def reindex_knowledge(
+    db: Session = Depends(get_db),
+) -> KnowledgeReindexResponse:
+    """为旧知识片段补充向量。"""
+
+    try:
+        return knowledge_service.reindex_knowledge_chunks(
+            db=db,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
 
 @router.get(
     "/search",
