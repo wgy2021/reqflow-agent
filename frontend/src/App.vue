@@ -115,6 +115,10 @@ const pageMeta = {
     title: '分析历史',
     breadcrumb: '工作空间 / 分析历史',
   },
+  knowledge: {
+    title: '知识库管理',
+    breadcrumb: '工作空间 / 知识库管理',
+  },
   settings: {
     title: '系统设置',
     breadcrumb: '系统 / 系统设置',
@@ -589,7 +593,10 @@ onMounted(async () => {
           <el-icon><Clock /></el-icon>
           <span>分析历史</span>
         </el-menu-item>
-
+        <el-menu-item index="knowledge">
+          <el-icon><Collection /></el-icon>
+          <span>知识库管理</span>
+        </el-menu-item>
         <p class="menu-group-title second-group">系统</p>
 
         <el-menu-item index="settings">
