@@ -14,6 +14,7 @@ import {
   deleteKnowledgeDocument,
   getKnowledgeDocument,
   listKnowledgeDocuments,
+  searchKnowledge,
 } from '../api/knowledge'
 
 const documents = ref([])
@@ -24,6 +25,10 @@ const detailDialogVisible = ref(false)
 const detailLoading = ref(false)
 const selectedDocument = ref(null)
 const deletingDocumentId = ref(null)
+const searchQuery = ref('')
+const searchLoading = ref(false)
+const searchResults = ref([])
+const hasSearched = ref(false)
 const documentForm = reactive({
   title: '',
   content: '',
@@ -56,6 +61,16 @@ function previewContent(content) {
   }
 
   return `${normalized.slice(0, 80)}...`
+}
+
+function formatSimilarity(score) {
+  const numericScore = Number(score)
+
+  if (Number.isNaN(numericScore)) {
+    return '-'
+  }
+
+  return `${(numericScore * 100).toFixed(1)}%`
 }
 
 function resetDocumentForm() {
@@ -163,6 +178,42 @@ async function loadDocuments() {
   }
 }
 
+async function runKnowledgeSearch() {
+  const query = searchQuery.value.trim()
+
+  if (!query) {
+    ElMessage.warning('请输入需要检索的内容')
+    return
+  }
+
+  searchLoading.value = true
+  hasSearched.value = false
+
+  try {
+    searchResults.value = await searchKnowledge({
+      query,
+      topK: 5,
+      minScore: 0,
+    })
+
+    hasSearched.value = true
+
+    ElMessage.success(
+      `语义检索完成，共找到 ${searchResults.value.length} 条结果`,
+    )
+  } catch (error) {
+    searchResults.value = []
+
+    ElMessage.error(
+      error instanceof Error
+        ? error.message
+        : '知识库语义检索失败',
+    )
+  } finally {
+    searchLoading.value = false
+  }
+}
+
 async function submitDocument() {
   const title = documentForm.title.trim()
   const content = documentForm.content.trim()
@@ -229,7 +280,92 @@ onMounted(loadDocuments)
         </el-button>
       </div>
     </div>
+        <el-card
+      shadow="never"
+      class="search-card"
+    >
+      <div class="search-header">
+        <div>
+          <strong>知识库语义检索</strong>
+          <p>输入需求描述，检索语义最相关的知识片段。</p>
+        </div>
+      </div>
 
+      <el-input
+        v-model="searchQuery"
+        clearable
+        maxlength="1000"
+        placeholder="例如：用户连续登录失败后应该如何处理？"
+        @keyup.enter="runKnowledgeSearch"
+      >
+        <template #append>
+          <el-button
+            :loading="searchLoading"
+            @click="runKnowledgeSearch"
+          >
+            语义检索
+          </el-button>
+        </template>
+      </el-input>
+
+      <p
+        v-if="hasSearched"
+        class="search-summary"
+      >
+        检索完成，共找到
+        <strong>{{ searchResults.length }}</strong>
+        条相关知识片段
+      </p>
+            <div
+        v-if="hasSearched && searchResults.length > 0"
+        class="search-results"
+      >
+        <article
+          v-for="result in searchResults"
+          :key="result.chunk_id"
+          class="search-result-item"
+        >
+          <div class="result-header">
+            <div>
+              <el-button
+                type="primary"
+                link
+                class="result-title"
+                @click="openDocumentDetail(result.document_id)"
+              >
+                {{ result.document_title }}
+              </el-button>
+
+              <span class="result-source">
+                {{ result.source || '未标注来源' }}
+              </span>
+            </div>
+
+            <el-tag
+              type="success"
+              effect="plain"
+            >
+              相似度 {{ formatSimilarity(result.score) }}
+            </el-tag>
+          </div>
+
+          <p class="result-content">
+            {{ result.content }}
+          </p>
+
+          <div class="result-footer">
+            <span>文档 ID：{{ result.document_id }}</span>
+            <span>片段序号：{{ result.chunk_index + 1 }}</span>
+          </div>
+        </article>
+      </div>
+
+      <el-empty
+        v-else-if="hasSearched"
+        description="没有找到相关知识片段"
+        :image-size="70"
+      />
+    </el-card>
     <el-card
       shadow="never"
       class="knowledge-card"
@@ -559,5 +695,89 @@ onMounted(loadDocuments)
   line-height: 1.85;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.search-card {
+  border-radius: 6px;
+}
+
+.search-header {
+  margin-bottom: 14px;
+}
+
+.search-header strong {
+  color: #172033;
+  font-size: 15px;
+}
+
+.search-header p {
+  margin: 6px 0 0;
+  color: #86909c;
+  font-size: 12px;
+}
+
+.search-summary {
+  margin: 12px 0 0;
+  color: #4e5969;
+  font-size: 13px;
+}
+
+.search-summary strong {
+  color: #0f8f7a;
+}
+.search-results {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.search-result-item {
+  padding: 14px 16px;
+  border: 1px solid #e5e6eb;
+  border-radius: 6px;
+  background: #fafbfc;
+}
+
+.result-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.result-header > div {
+  min-width: 0;
+}
+
+.result-title {
+  height: auto;
+  padding: 0;
+  font-weight: 600;
+  white-space: normal;
+  text-align: left;
+}
+
+.result-source {
+  display: block;
+  margin-top: 5px;
+  color: #86909c;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.result-content {
+  margin: 12px 0;
+  color: #4e5969;
+  font-size: 13px;
+  line-height: 1.75;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.result-footer {
+  display: flex;
+  gap: 18px;
+  color: #86909c;
+  font-size: 12px;
 }
 </style>

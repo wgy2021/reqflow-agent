@@ -79,3 +79,19 @@ export function deleteKnowledgeDocument(documentId) {
     },
   )
 }
+
+export function searchKnowledge({
+  query,
+  topK = 5,
+  minScore = 0,
+}) {
+  const params = new URLSearchParams({
+    query: query.trim(),
+    top_k: String(topK),
+    min_score: String(minScore),
+  })
+
+  return requestJson(
+    `${KNOWLEDGE_API}/search?${params.toString()}`,
+  )
+}
