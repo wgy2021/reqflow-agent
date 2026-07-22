@@ -15,6 +15,7 @@ import {
   getKnowledgeDocument,
   listKnowledgeDocuments,
   searchKnowledge,
+  updateKnowledgeDocument,
 } from '../api/knowledge'
 
 const documents = ref([])
@@ -25,6 +26,7 @@ const detailDialogVisible = ref(false)
 const detailLoading = ref(false)
 const selectedDocument = ref(null)
 const deletingDocumentId = ref(null)
+const editingDocumentId = ref(null)
 const searchQuery = ref('')
 const searchLoading = ref(false)
 const searchResults = ref([])
@@ -82,8 +84,24 @@ function resetDocumentForm() {
 }
 
 function openCreateDialog() {
+  editingDocumentId.value = null
   resetDocumentForm()
   dialogVisible.value = true
+}
+
+function openEditDialog(document) {
+  editingDocumentId.value = document.id
+
+  documentForm.title = document.title
+  documentForm.content = document.content
+  documentForm.source = document.source || ''
+
+  dialogVisible.value = true
+}
+
+function handleDialogClosed() {
+  editingDocumentId.value = null
+  resetDocumentForm()
 }
 
 async function openDocumentDetail(documentId) {
@@ -107,7 +125,6 @@ async function openDocumentDetail(documentId) {
     detailLoading.value = false
   }
 }
-
 
 async function confirmDeleteDocument(document) {
   try {
@@ -193,9 +210,9 @@ async function runKnowledgeSearch() {
 
   try {
     searchResults.value = await searchKnowledge({
-    query,
-    topK: searchTopK.value,
-    minScore: searchMinScore.value,
+      query,
+      topK: searchTopK.value,
+      minScore: searchMinScore.value,
     })
 
     hasSearched.value = true
@@ -230,17 +247,34 @@ async function submitDocument() {
     return
   }
 
+  const isEditing = editingDocumentId.value !== null
+
   submitting.value = true
 
   try {
-    await createKnowledgeDocument({
+    const documentData = {
       title,
       content,
       source: documentForm.source,
-    })
+    }
 
-    ElMessage.success('知识文档创建成功')
+    if (isEditing) {
+      await updateKnowledgeDocument(
+        editingDocumentId.value,
+        documentData,
+      )
+    } else {
+      await createKnowledgeDocument(documentData)
+    }
+
+    ElMessage.success(
+      isEditing
+        ? '知识文档更新成功'
+        : '知识文档创建成功',
+    )
+
     dialogVisible.value = false
+    editingDocumentId.value = null
     resetDocumentForm()
 
     await loadDocuments()
@@ -248,7 +282,11 @@ async function submitDocument() {
     ElMessage.error(
       error instanceof Error
         ? error.message
-        : '知识文档创建失败',
+        : (
+          isEditing
+            ? '知识文档更新失败'
+            : '知识文档创建失败'
+        ),
     )
   } finally {
     submitting.value = false
@@ -282,7 +320,8 @@ onMounted(loadDocuments)
         </el-button>
       </div>
     </div>
-        <el-card
+
+    <el-card
       shadow="never"
       class="search-card"
     >
@@ -310,7 +349,7 @@ onMounted(loadDocuments)
         </template>
       </el-input>
 
-            <div class="search-options">
+      <div class="search-options">
         <div class="search-option">
           <span>返回数量</span>
 
@@ -348,7 +387,8 @@ onMounted(loadDocuments)
         <strong>{{ searchResults.length }}</strong>
         条相关知识片段
       </p>
-            <div
+
+      <div
         v-if="hasSearched && searchResults.length > 0"
         class="search-results"
       >
@@ -398,6 +438,7 @@ onMounted(loadDocuments)
         :image-size="70"
       />
     </el-card>
+
     <el-card
       shadow="never"
       class="knowledge-card"
@@ -422,20 +463,20 @@ onMounted(loadDocuments)
         />
 
         <el-table-column
-           label="文档标题"
-           min-width="180"
+          label="文档标题"
+          min-width="180"
         >
-        <template #default="{ row }">
-        <el-button
-            class="title-button"
-            type="primary"
-            link
-             @click="openDocumentDetail(row.id)"
-         >
-            {{ row.title }}
-           </el-button>
-        </template>
-    </el-table-column>
+          <template #default="{ row }">
+            <el-button
+              class="title-button"
+              type="primary"
+              link
+              @click="openDocumentDetail(row.id)"
+            >
+              {{ row.title }}
+            </el-button>
+          </template>
+        </el-table-column>
 
         <el-table-column
           label="内容摘要"
@@ -465,36 +506,49 @@ onMounted(loadDocuments)
             {{ formatDate(row.created_at) }}
           </template>
         </el-table-column>
-            <el-table-column
-                label="操作"
-                width="100"
-                fixed="right"
-            >
-        <template #default="{ row }">
-            <el-button
-            type="danger"
-            link
-            :loading="deletingDocumentId === row.id"
-            :disabled="
-             deletingDocumentId !== null
-             && deletingDocumentId !== row.id
-             "
-         @click="confirmDeleteDocument(row)"
-         >
-            删除
-                </el-button>
-            </template>
-        </el-table-column>
 
+        <el-table-column
+          label="操作"
+          width="150"
+          fixed="right"
+        >
+          <template #default="{ row }">
+            <el-button
+              type="primary"
+              link
+              :disabled="deletingDocumentId !== null"
+              @click="openEditDialog(row)"
+            >
+              编辑
+            </el-button>
+
+            <el-button
+              type="danger"
+              link
+              :loading="deletingDocumentId === row.id"
+              :disabled="
+                deletingDocumentId !== null
+                && deletingDocumentId !== row.id
+              "
+              @click="confirmDeleteDocument(row)"
+            >
+              删除
+            </el-button>
+          </template>
+        </el-table-column>
       </el-table>
     </el-card>
 
     <el-dialog
       v-model="dialogVisible"
-      title="新建知识文档"
+      :title="
+        editingDocumentId === null
+          ? '新建知识文档'
+          : '编辑知识文档'
+      "
       width="620px"
       :close-on-click-modal="false"
-      @closed="resetDocumentForm"
+      @closed="handleDialogClosed"
     >
       <el-form
         label-position="top"
@@ -547,11 +601,12 @@ onMounted(loadDocuments)
           :loading="submitting"
           @click="submitDocument"
         >
-          创建文档
+          {{ editingDocumentId === null ? '创建文档' : '保存修改' }}
         </el-button>
       </template>
     </el-dialog>
-        <el-dialog
+
+    <el-dialog
       v-model="detailDialogVisible"
       title="知识文档详情"
       width="680px"

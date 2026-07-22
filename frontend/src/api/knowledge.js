@@ -71,6 +71,30 @@ export function getKnowledgeDocument(documentId) {
   )
 }
 
+export function updateKnowledgeDocument(
+  documentId,
+  {
+    title,
+    content,
+    source,
+  },
+) {
+  return requestJson(
+    `${KNOWLEDGE_API}/documents/${documentId}`,
+    {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: title.trim(),
+        content: content.trim(),
+        source: source.trim() || null,
+      }),
+    },
+  )
+}
+
 export function deleteKnowledgeDocument(documentId) {
   return requestJson(
     `${KNOWLEDGE_API}/documents/${documentId}`,
