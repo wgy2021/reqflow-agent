@@ -8,6 +8,7 @@ import { ElMessage } from 'element-plus'
 
 import {
   createKnowledgeDocument,
+  getKnowledgeDocument,
   listKnowledgeDocuments,
 } from '../api/knowledge'
 
@@ -15,6 +16,9 @@ const documents = ref([])
 const loading = ref(false)
 const dialogVisible = ref(false)
 const submitting = ref(false)
+const detailDialogVisible = ref(false)
+const detailLoading = ref(false)
+const selectedDocument = ref(null)
 
 const documentForm = reactive({
   title: '',
@@ -59,6 +63,28 @@ function resetDocumentForm() {
 function openCreateDialog() {
   resetDocumentForm()
   dialogVisible.value = true
+}
+
+async function openDocumentDetail(documentId) {
+  detailDialogVisible.value = true
+  detailLoading.value = true
+  selectedDocument.value = null
+
+  try {
+    selectedDocument.value = await getKnowledgeDocument(
+      documentId,
+    )
+  } catch (error) {
+    detailDialogVisible.value = false
+
+    ElMessage.error(
+      error instanceof Error
+        ? error.message
+        : '知识文档详情加载失败',
+    )
+  } finally {
+    detailLoading.value = false
+  }
 }
 
 async function loadDocuments() {
@@ -173,10 +199,20 @@ onMounted(loadDocuments)
         />
 
         <el-table-column
-          prop="title"
-          label="文档标题"
-          min-width="180"
-        />
+           label="文档标题"
+           min-width="180"
+        >
+        <template #default="{ row }">
+        <el-button
+            class="title-button"
+            type="primary"
+            link
+             @click="openDocumentDetail(row.id)"
+         >
+            {{ row.title }}
+           </el-button>
+        </template>
+    </el-table-column>
 
         <el-table-column
           label="内容摘要"
@@ -271,6 +307,56 @@ onMounted(loadDocuments)
         </el-button>
       </template>
     </el-dialog>
+        <el-dialog
+      v-model="detailDialogVisible"
+      title="知识文档详情"
+      width="680px"
+    >
+      <div
+        v-loading="detailLoading"
+        class="detail-panel"
+      >
+        <template v-if="selectedDocument">
+          <div class="detail-meta-grid">
+            <div class="detail-meta-item">
+              <span>文档 ID</span>
+              <strong>{{ selectedDocument.id }}</strong>
+            </div>
+
+            <div class="detail-meta-item">
+              <span>创建时间</span>
+              <strong>
+                {{ formatDate(selectedDocument.created_at) }}
+              </strong>
+            </div>
+
+            <div class="detail-meta-item full-width">
+              <span>文档标题</span>
+              <strong>{{ selectedDocument.title }}</strong>
+            </div>
+
+            <div class="detail-meta-item full-width">
+              <span>文档来源</span>
+              <strong>
+                {{ selectedDocument.source || '未标注来源' }}
+              </strong>
+            </div>
+          </div>
+
+          <div class="detail-content">
+            <strong>完整内容</strong>
+
+            <p>{{ selectedDocument.content }}</p>
+          </div>
+        </template>
+      </div>
+
+      <template #footer>
+        <el-button @click="detailDialogVisible = false">
+          关闭
+        </el-button>
+      </template>
+    </el-dialog>
   </section>
 </template>
 
@@ -338,5 +424,64 @@ onMounted(loadDocuments)
 
 .document-form {
   padding: 0 4px;
+}
+.title-button {
+  height: auto;
+  padding: 0;
+  font-weight: 600;
+  white-space: normal;
+  text-align: left;
+}
+
+.detail-panel {
+  min-height: 220px;
+}
+
+.detail-meta-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.detail-meta-item {
+  padding: 12px 14px;
+  background: #f7f8fa;
+  border-radius: 6px;
+}
+
+.detail-meta-item.full-width {
+  grid-column: 1 / -1;
+}
+
+.detail-meta-item span {
+  display: block;
+  margin-bottom: 6px;
+  color: #86909c;
+  font-size: 12px;
+}
+
+.detail-meta-item strong {
+  color: #1d2129;
+  font-size: 14px;
+  word-break: break-word;
+}
+
+.detail-content {
+  padding-top: 16px;
+  border-top: 1px solid #ebeef5;
+}
+
+.detail-content > strong {
+  color: #1d2129;
+  font-size: 14px;
+}
+
+.detail-content p {
+  margin: 10px 0 0;
+  color: #4e5969;
+  line-height: 1.85;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 </style>

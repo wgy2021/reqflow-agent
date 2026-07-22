@@ -60,3 +60,9 @@ export function createKnowledgeDocument({
     },
   )
 }
+
+export function getKnowledgeDocument(documentId) {
+  return requestJson(
+    `${KNOWLEDGE_API}/documents/${documentId}`,
+  )
+}
