@@ -1,11 +1,26 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import {
+  onMounted,
+  reactive,
+  ref,
+} from 'vue'
 import { ElMessage } from 'element-plus'
 
-import { listKnowledgeDocuments } from '../api/knowledge'
+import {
+  createKnowledgeDocument,
+  listKnowledgeDocuments,
+} from '../api/knowledge'
 
 const documents = ref([])
 const loading = ref(false)
+const dialogVisible = ref(false)
+const submitting = ref(false)
+
+const documentForm = reactive({
+  title: '',
+  content: '',
+  source: '',
+})
 
 function formatDate(value) {
   if (!value) {
@@ -35,6 +50,17 @@ function previewContent(content) {
   return `${normalized.slice(0, 80)}...`
 }
 
+function resetDocumentForm() {
+  documentForm.title = ''
+  documentForm.content = ''
+  documentForm.source = ''
+}
+
+function openCreateDialog() {
+  resetDocumentForm()
+  dialogVisible.value = true
+}
+
 async function loadDocuments() {
   loading.value = true
 
@@ -53,6 +79,45 @@ async function loadDocuments() {
     )
   } finally {
     loading.value = false
+  }
+}
+
+async function submitDocument() {
+  const title = documentForm.title.trim()
+  const content = documentForm.content.trim()
+
+  if (!title) {
+    ElMessage.warning('请输入文档标题')
+    return
+  }
+
+  if (!content) {
+    ElMessage.warning('请输入文档内容')
+    return
+  }
+
+  submitting.value = true
+
+  try {
+    await createKnowledgeDocument({
+      title,
+      content,
+      source: documentForm.source,
+    })
+
+    ElMessage.success('知识文档创建成功')
+    dialogVisible.value = false
+    resetDocumentForm()
+
+    await loadDocuments()
+  } catch (error) {
+    ElMessage.error(
+      error instanceof Error
+        ? error.message
+        : '知识文档创建失败',
+    )
+  } finally {
+    submitting.value = false
   }
 }
 
@@ -77,7 +142,7 @@ onMounted(loadDocuments)
 
         <el-button
           type="primary"
-          disabled
+          @click="openCreateDialog"
         >
           新建知识文档
         </el-button>
@@ -143,6 +208,69 @@ onMounted(loadDocuments)
         </el-table-column>
       </el-table>
     </el-card>
+
+    <el-dialog
+      v-model="dialogVisible"
+      title="新建知识文档"
+      width="620px"
+      :close-on-click-modal="false"
+      @closed="resetDocumentForm"
+    >
+      <el-form
+        label-position="top"
+        class="document-form"
+      >
+        <el-form-item
+          label="文档标题"
+          required
+        >
+          <el-input
+            v-model="documentForm.title"
+            maxlength="200"
+            show-word-limit
+            placeholder="例如：用户登录安全规范"
+          />
+        </el-form-item>
+
+        <el-form-item
+          label="文档内容"
+          required
+        >
+          <el-input
+            v-model="documentForm.content"
+            type="textarea"
+            :rows="9"
+            resize="vertical"
+            placeholder="请输入用于 RAG 检索的知识内容"
+          />
+        </el-form-item>
+
+        <el-form-item label="文档来源">
+          <el-input
+            v-model="documentForm.source"
+            maxlength="200"
+            placeholder="例如：security-policy.md，可不填"
+          />
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button
+          :disabled="submitting"
+          @click="dialogVisible = false"
+        >
+          取消
+        </el-button>
+
+        <el-button
+          type="primary"
+          :loading="submitting"
+          @click="submitDocument"
+        >
+          创建文档
+        </el-button>
+      </template>
+    </el-dialog>
   </section>
 </template>
 
@@ -206,5 +334,9 @@ onMounted(loadDocuments)
 .content-preview {
   color: #4e5969;
   line-height: 1.7;
+}
+
+.document-form {
+  padding: 0 4px;
 }
 </style>

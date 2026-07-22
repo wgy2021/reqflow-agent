@@ -39,3 +39,24 @@ export function listKnowledgeDocuments({
     `${KNOWLEDGE_API}/documents?${query.toString()}`,
   )
 }
+
+export function createKnowledgeDocument({
+  title,
+  content,
+  source,
+}) {
+  return requestJson(
+    `${KNOWLEDGE_API}/documents`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        title: title.trim(),
+        content: content.trim(),
+        source: source.trim() || null,
+      }),
+    },
+  )
+}
