@@ -29,6 +29,8 @@ const searchQuery = ref('')
 const searchLoading = ref(false)
 const searchResults = ref([])
 const hasSearched = ref(false)
+const searchTopK = ref(5)
+const searchMinScore = ref(0)
 const documentForm = reactive({
   title: '',
   content: '',
@@ -191,9 +193,9 @@ async function runKnowledgeSearch() {
 
   try {
     searchResults.value = await searchKnowledge({
-      query,
-      topK: 5,
-      minScore: 0,
+    query,
+    topK: searchTopK.value,
+    minScore: searchMinScore.value,
     })
 
     hasSearched.value = true
@@ -307,6 +309,36 @@ onMounted(loadDocuments)
           </el-button>
         </template>
       </el-input>
+
+            <div class="search-options">
+        <div class="search-option">
+          <span>返回数量</span>
+
+          <el-input-number
+            v-model="searchTopK"
+            :min="1"
+            :max="20"
+            :step="1"
+            controls-position="right"
+          />
+        </div>
+
+        <div class="search-option">
+          <span>
+            最低相似度
+            {{ formatSimilarity(searchMinScore) }}
+          </span>
+
+          <el-input-number
+            v-model="searchMinScore"
+            :min="0"
+            :max="1"
+            :step="0.05"
+            :precision="2"
+            controls-position="right"
+          />
+        </div>
+      </div>
 
       <p
         v-if="hasSearched"
@@ -779,5 +811,26 @@ onMounted(loadDocuments)
   gap: 18px;
   color: #86909c;
   font-size: 12px;
+}
+.search-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-top: 12px;
+}
+
+.search-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.search-option > span {
+  color: #4e5969;
+  font-size: 13px;
+}
+
+.search-option :deep(.el-input-number) {
+  width: 130px;
 }
 </style>
