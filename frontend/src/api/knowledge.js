@@ -119,3 +119,12 @@ export function searchKnowledge({
     `${KNOWLEDGE_API}/search?${params.toString()}`,
   )
 }
+
+export function reindexKnowledge() {
+  return requestJson(
+    `${KNOWLEDGE_API}/reindex`,
+    {
+      method: 'POST',
+    },
+  )
+}

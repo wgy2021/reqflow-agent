@@ -14,6 +14,7 @@ import {
   deleteKnowledgeDocument,
   getKnowledgeDocument,
   listKnowledgeDocuments,
+  reindexKnowledge,
   searchKnowledge,
   updateKnowledgeDocument,
 } from '../api/knowledge'
@@ -22,6 +23,7 @@ const documents = ref([])
 const loading = ref(false)
 const dialogVisible = ref(false)
 const submitting = ref(false)
+const reindexing = ref(false)
 const detailDialogVisible = ref(false)
 const detailLoading = ref(false)
 const selectedDocument = ref(null)
@@ -293,6 +295,30 @@ async function submitDocument() {
   }
 }
 
+async function runReindex() {
+  if (reindexing.value) {
+    return
+  }
+
+  reindexing.value = true
+
+  try {
+    const result = await reindexKnowledge()
+
+    ElMessage.success(
+      `索引重建完成：更新 ${result.updated_chunks} 个片段，跳过 ${result.skipped_chunks} 个片段`,
+    )
+  } catch (error) {
+    ElMessage.error(
+      error instanceof Error
+        ? error.message
+        : '知识库索引重建失败',
+    )
+  } finally {
+    reindexing.value = false
+  }
+}
+
 onMounted(loadDocuments)
 </script>
 
@@ -304,21 +330,29 @@ onMounted(loadDocuments)
         <p>维护用于 RAG 检索与需求分析的知识文档。</p>
       </div>
 
-      <div class="toolbar-actions">
-        <el-button
-          :loading="loading"
-          @click="loadDocuments"
-        >
-          刷新
-        </el-button>
+          <div class="toolbar-actions">
+      <el-button
+        :loading="loading"
+        @click="loadDocuments"
+      >
+        刷新
+      </el-button>
 
-        <el-button
-          type="primary"
-          @click="openCreateDialog"
-        >
-          新建知识文档
-        </el-button>
-      </div>
+      <el-button
+        :loading="reindexing"
+        :disabled="loading || submitting"
+        @click="runReindex"
+      >
+        重建索引
+      </el-button>
+
+      <el-button
+        type="primary"
+        @click="openCreateDialog"
+      >
+        新建知识文档
+      </el-button>
+    </div>
     </div>
 
     <el-card
