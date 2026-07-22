@@ -146,6 +146,57 @@ def test_list_and_get_documents(
         "第一份规范"
     )
 
+def test_delete_document_removes_document_and_chunks(
+    client: TestClient,
+) -> None:
+    create_response = client.post(
+        "/knowledge/documents",
+        json={
+            "title": "待删除知识文档",
+            "content": "用户密码必须进行加密保存",
+            "source": "delete-api-test.md",
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    document_id = create_response.json()["id"]
+
+    chunks_before_delete = client.get(
+        f"/knowledge/documents/{document_id}/chunks"
+    )
+
+    assert chunks_before_delete.status_code == 200
+    assert chunks_before_delete.json() != []
+
+    delete_response = client.delete(
+        f"/knowledge/documents/{document_id}"
+    )
+
+    assert delete_response.status_code == 204
+    assert delete_response.content == b""
+
+    document_after_delete = client.get(
+        f"/knowledge/documents/{document_id}"
+    )
+
+    chunks_after_delete = client.get(
+        f"/knowledge/documents/{document_id}/chunks"
+    )
+
+    assert document_after_delete.status_code == 404
+    assert chunks_after_delete.status_code == 404
+
+    delete_again_response = client.delete(
+        f"/knowledge/documents/{document_id}"
+    )
+
+    assert delete_again_response.status_code == 404
+    assert delete_again_response.json() == {
+        "detail": "Knowledge document not found",
+    }
+
+
 
 def test_create_whitespace_document_returns_422(
     client: TestClient,

@@ -15,12 +15,12 @@ from app.models import (
 from app.schemas import KnowledgeDocumentCreate
 from app.services.knowledge import (
     create_document,
+    delete_document,
     get_document,
     list_document_chunks,
     list_documents,
     reindex_knowledge_chunks,
 )
-
 
 test_engine = create_engine(
     "sqlite://",
@@ -137,6 +137,50 @@ def test_list_and_get_documents(
 
     assert found_document is not None
     assert found_document.title == "第一份规范"
+
+
+def test_delete_document_removes_document_and_chunks(
+    db: Session,
+) -> None:
+    document = create_document(
+        db=db,
+        document=KnowledgeDocumentCreate(
+            title="待删除知识文档",
+            content="用户密码必须进行加密保存",
+            source="delete-test.md",
+        ),
+    )
+
+    chunks_before_delete = list_document_chunks(
+        db=db,
+        document_id=document.id,
+    )
+
+    assert chunks_before_delete != []
+
+    deleted = delete_document(
+        db=db,
+        document_id=document.id,
+    )
+
+    assert deleted is True
+
+    assert get_document(
+        db=db,
+        document_id=document.id,
+    ) is None
+
+    assert list_document_chunks(
+        db=db,
+        document_id=document.id,
+    ) == []
+
+    deleted_again = delete_document(
+        db=db,
+        document_id=document.id,
+    )
+
+    assert deleted_again is False
 
 
 def test_create_empty_document_rolls_back(

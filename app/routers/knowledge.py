@@ -154,6 +154,27 @@ def get_knowledge_document(
 
     return document
 
+@router.delete(
+    "/documents/{document_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_knowledge_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+) -> None:
+    """删除知识文档及其全部知识片段。"""
+
+    deleted = knowledge_service.delete_document(
+        db=db,
+        document_id=document_id,
+    )
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Knowledge document not found",
+        )
+
 
 @router.get(
     "/documents/{document_id}/chunks",

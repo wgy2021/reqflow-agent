@@ -1,6 +1,6 @@
 """知识库文档处理和数据库服务。"""
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 from app.agent.embeddings import (
     EmbeddingClient,
@@ -167,6 +167,38 @@ def get_document(
         KnowledgeDocument,
         document_id,
     )
+
+
+def delete_document(
+    db: Session,
+    document_id: int,
+) -> bool:
+    """删除知识文档及其全部知识片段。"""
+
+    document = get_document(
+        db=db,
+        document_id=document_id,
+    )
+
+    if document is None:
+        return False
+
+    try:
+        db.execute(
+            delete(KnowledgeChunk).where(
+                KnowledgeChunk.document_id
+                == document_id
+            )
+        )
+
+        db.delete(document)
+        db.commit()
+
+        return True
+
+    except Exception:
+        db.rollback()
+        raise
 
 
 def list_document_chunks(
