@@ -33,6 +33,13 @@ const routes = [
       import('../views/AnalysisHistoryView.vue'),
   },
   {
+  path: '/knowledge',
+  name: 'knowledge',
+  component: () =>
+    import('../views/KnowledgeBaseView.vue'),
+  },
+
+  {
     path: '/settings',
     name: 'settings',
     component: () =>
