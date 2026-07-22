@@ -16,6 +16,7 @@ from app.schemas import (
     KnowledgeChunkResponse,
     KnowledgeDocumentCreate,
     KnowledgeDocumentResponse,
+    KnowledgeDocumentUpdate,
     KnowledgeReindexResponse,
     KnowledgeSearchResult,
 )
@@ -153,6 +154,41 @@ def get_knowledge_document(
         )
 
     return document
+
+@router.put(
+    "/documents/{document_id}",
+    response_model=KnowledgeDocumentResponse,
+)
+def update_knowledge_document(
+    document_id: int,
+    document: KnowledgeDocumentUpdate,
+    db: Session = Depends(get_db),
+) -> KnowledgeDocument:
+    """更新知识文档，并重新生成知识片段和向量。"""
+
+    try:
+        updated_document = (
+            knowledge_service.update_document(
+                db=db,
+                document_id=document_id,
+                document=document,
+            )
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_CONTENT
+            ),
+            detail=str(exc),
+        ) from exc
+
+    if updated_document is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Knowledge document not found",
+        )
+
+    return updated_document
 
 @router.delete(
     "/documents/{document_id}",

@@ -14,6 +14,7 @@ from app.models import (
 )
 from app.schemas import (
     KnowledgeDocumentCreate,
+    KnowledgeDocumentUpdate,
     KnowledgeReindexResponse,
     KnowledgeSearchResult,
 )
@@ -167,6 +168,77 @@ def get_document(
         KnowledgeDocument,
         document_id,
     )
+
+def update_document(
+    db: Session,
+    document_id: int,
+    document: KnowledgeDocumentUpdate,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+    overlap: int = DEFAULT_CHUNK_OVERLAP,
+    embedding_client: EmbeddingClient | None = None,
+) -> KnowledgeDocument | None:
+    """更新知识文档，并重新生成知识片段和向量。"""
+
+    db_document = get_document(
+        db=db,
+        document_id=document_id,
+    )
+
+    if db_document is None:
+        return None
+
+    chunks = split_text(
+        text=document.content,
+        chunk_size=chunk_size,
+        overlap=overlap,
+    )
+
+    if not chunks:
+        raise ValueError("文档内容清理后不能为空")
+
+    if embedding_client is None:
+        embedding_client = LocalHashEmbeddingClient()
+
+    embeddings = embedding_client.embed_texts(chunks)
+
+    if len(embeddings) != len(chunks):
+        raise ValueError(
+            "向量数量与知识片段数量不一致"
+        )
+
+    try:
+        db.execute(
+            delete(KnowledgeChunk).where(
+                KnowledgeChunk.document_id
+                == document_id
+            )
+        )
+
+        db_document.title = document.title
+        db_document.content = normalize_text(
+            document.content
+        )
+        db_document.source = document.source
+
+        db_chunks = [
+            KnowledgeChunk(
+                document_id=document_id,
+                chunk_index=index,
+                content=chunk,
+                embedding=embeddings[index],
+            )
+            for index, chunk in enumerate(chunks)
+        ]
+
+        db.add_all(db_chunks)
+        db.commit()
+        db.refresh(db_document)
+
+        return db_document
+
+    except Exception:
+        db.rollback()
+        raise
 
 
 def delete_document(

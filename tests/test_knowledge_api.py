@@ -145,6 +145,65 @@ def test_list_and_get_documents(
     assert get_response.json()["title"] == (
         "第一份规范"
     )
+def test_update_document_regenerates_chunks(
+    client: TestClient,
+) -> None:
+    create_response = client.post(
+        "/knowledge/documents",
+        json={
+            "title": "旧接口文档",
+            "content": "旧知识内容",
+            "source": "old-api.md",
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    document_id = create_response.json()["id"]
+
+    update_response = client.put(
+        f"/knowledge/documents/{document_id}",
+        json={
+            "title": "新接口文档",
+            "content": "B" * 600,
+            "source": "new-api.md",
+        },
+    )
+
+    assert update_response.status_code == 200
+
+    updated_document = update_response.json()
+
+    assert updated_document["id"] == document_id
+    assert updated_document["title"] == "新接口文档"
+    assert updated_document["content"] == "B" * 600
+    assert updated_document["source"] == "new-api.md"
+
+    chunks_response = client.get(
+        f"/knowledge/documents/{document_id}/chunks"
+    )
+
+    assert chunks_response.status_code == 200
+
+    chunks = chunks_response.json()
+
+    assert len(chunks) == 2
+    assert chunks[0]["chunk_index"] == 0
+    assert chunks[1]["chunk_index"] == 1
+
+    missing_response = client.put(
+        "/knowledge/documents/999",
+        json={
+            "title": "不存在",
+            "content": "不存在的知识内容",
+            "source": None,
+        },
+    )
+
+    assert missing_response.status_code == 404
+    assert missing_response.json() == {
+        "detail": "Knowledge document not found",
+    }
 
 def test_delete_document_removes_document_and_chunks(
     client: TestClient,

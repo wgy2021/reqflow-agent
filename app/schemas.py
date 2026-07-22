@@ -78,6 +78,10 @@ class KnowledgeDocumentCreate(BaseModel):
         max_length=500,
     )
 
+class KnowledgeDocumentUpdate(
+    KnowledgeDocumentCreate,
+):
+    """更新知识库文档时接收的数据。"""
 
 class KnowledgeDocumentResponse(BaseModel):
     """返回给前端的知识库文档。"""

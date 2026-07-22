@@ -12,7 +12,10 @@ from app.models import (
     KnowledgeChunk,
     KnowledgeDocument,
 )
-from app.schemas import KnowledgeDocumentCreate
+from app.schemas import (
+    KnowledgeDocumentCreate,
+    KnowledgeDocumentUpdate,
+)
 from app.services.knowledge import (
     create_document,
     delete_document,
@@ -20,8 +23,8 @@ from app.services.knowledge import (
     list_document_chunks,
     list_documents,
     reindex_knowledge_chunks,
+    update_document,
 )
-
 test_engine = create_engine(
     "sqlite://",
     connect_args={
@@ -137,6 +140,80 @@ def test_list_and_get_documents(
 
     assert found_document is not None
     assert found_document.title == "第一份规范"
+
+def test_update_document_regenerates_chunks(
+    db: Session,
+) -> None:
+    created_document = create_document(
+        db=db,
+        document=KnowledgeDocumentCreate(
+            title="旧知识文档",
+            content="ABCDEFGHIJ",
+            source="old.md",
+        ),
+        chunk_size=6,
+        overlap=2,
+        embedding_client=LocalHashEmbeddingClient(
+            dimension=8,
+        ),
+    )
+
+    updated_document = update_document(
+        db=db,
+        document_id=created_document.id,
+        document=KnowledgeDocumentUpdate(
+            title="新知识文档",
+            content="1234567890",
+            source="new.md",
+        ),
+        chunk_size=6,
+        overlap=2,
+        embedding_client=LocalHashEmbeddingClient(
+            dimension=8,
+        ),
+    )
+
+    assert updated_document is not None
+    assert updated_document.id == created_document.id
+    assert updated_document.title == "新知识文档"
+    assert updated_document.content == "1234567890"
+    assert updated_document.source == "new.md"
+
+    chunks = list_document_chunks(
+        db=db,
+        document_id=created_document.id,
+    )
+
+    assert [
+        chunk.content
+        for chunk in chunks
+    ] == [
+        "123456",
+        "567890",
+    ]
+
+    assert all(
+        chunk.embedding is not None
+        for chunk in chunks
+    )
+
+    assert all(
+        len(chunk.embedding) == 8
+        for chunk in chunks
+        if chunk.embedding is not None
+    )
+
+    missing_document = update_document(
+        db=db,
+        document_id=999,
+        document=KnowledgeDocumentUpdate(
+            title="不存在",
+            content="不存在的文档内容",
+            source=None,
+        ),
+    )
+
+    assert missing_document is None
 
 
 def test_delete_document_removes_document_and_chunks(
