@@ -4,10 +4,14 @@ import {
   reactive,
   ref,
 } from 'vue'
-import { ElMessage } from 'element-plus'
+import {
+  ElMessage,
+  ElMessageBox,
+} from 'element-plus'
 
 import {
   createKnowledgeDocument,
+  deleteKnowledgeDocument,
   getKnowledgeDocument,
   listKnowledgeDocuments,
 } from '../api/knowledge'
@@ -19,7 +23,7 @@ const submitting = ref(false)
 const detailDialogVisible = ref(false)
 const detailLoading = ref(false)
 const selectedDocument = ref(null)
-
+const deletingDocumentId = ref(null)
 const documentForm = reactive({
   title: '',
   content: '',
@@ -84,6 +88,57 @@ async function openDocumentDetail(documentId) {
     )
   } finally {
     detailLoading.value = false
+  }
+}
+
+
+async function confirmDeleteDocument(document) {
+  try {
+    await ElMessageBox.confirm(
+      `确定删除知识文档“${document.title}”吗？相关知识片段也会一起删除。`,
+      '删除知识文档',
+      {
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+        confirmButtonClass: 'danger-confirm-button',
+      },
+    )
+  } catch (action) {
+    if (
+      action === 'cancel'
+      || action === 'close'
+    ) {
+      return
+    }
+
+    throw action
+  }
+
+  deletingDocumentId.value = document.id
+
+  try {
+    await deleteKnowledgeDocument(document.id)
+
+    if (
+      selectedDocument.value?.id
+      === document.id
+    ) {
+      detailDialogVisible.value = false
+      selectedDocument.value = null
+    }
+
+    ElMessage.success('知识文档删除成功')
+
+    await loadDocuments()
+  } catch (error) {
+    ElMessage.error(
+      error instanceof Error
+        ? error.message
+        : '知识文档删除失败',
+    )
+  } finally {
+    deletingDocumentId.value = null
   }
 }
 
@@ -242,6 +297,27 @@ onMounted(loadDocuments)
             {{ formatDate(row.created_at) }}
           </template>
         </el-table-column>
+            <el-table-column
+                label="操作"
+                width="100"
+                fixed="right"
+            >
+        <template #default="{ row }">
+            <el-button
+            type="danger"
+            link
+            :loading="deletingDocumentId === row.id"
+            :disabled="
+             deletingDocumentId !== null
+             && deletingDocumentId !== row.id
+             "
+         @click="confirmDeleteDocument(row)"
+         >
+            删除
+                </el-button>
+            </template>
+        </el-table-column>
+
       </el-table>
     </el-card>
 

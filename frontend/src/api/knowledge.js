@@ -23,6 +23,10 @@ async function requestJson(url, options = {}) {
     )
   }
 
+  if (response.status === 204) {
+    return null
+  }
+
   return response.json()
 }
 
@@ -64,5 +68,14 @@ export function createKnowledgeDocument({
 export function getKnowledgeDocument(documentId) {
   return requestJson(
     `${KNOWLEDGE_API}/documents/${documentId}`,
+  )
+}
+
+export function deleteKnowledgeDocument(documentId) {
+  return requestJson(
+    `${KNOWLEDGE_API}/documents/${documentId}`,
+    {
+      method: 'DELETE',
+    },
   )
 }
