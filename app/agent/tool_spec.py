@@ -25,3 +25,14 @@ class ToolSpec(BaseModel):
     requires_approval: bool = False
     is_idempotent: bool = True
     handler: ToolHandler
+    def to_function_tool(self) -> dict[str, Any]:
+        """转换为 OpenAI-compatible Function Calling 工具定义。"""
+
+        return {
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": self.description,
+                "parameters": self.input_model.model_json_schema(),
+            },
+        }

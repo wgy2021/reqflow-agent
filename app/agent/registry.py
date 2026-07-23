@@ -47,6 +47,14 @@ def list_tools() -> list[dict[str, str]]:
         for tool in _tool_registry.values()
     ]
 
+def list_function_tools() -> list[dict[str, Any]]:
+    """返回可传给 OpenAI-compatible API 的工具定义。"""
+
+    return [
+        tool.to_function_tool()
+        for tool in _tool_registry.values()
+    ]
+
 def get_tool_spec(name: str) -> ToolSpec:
     """根据工具名称获取完整的 ToolSpec。"""
 

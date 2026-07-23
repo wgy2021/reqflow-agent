@@ -1,9 +1,11 @@
 import pytest
 from pydantic import BaseModel, ValidationError
+
 from app.agent import registry
-from app.agent.tools.completeness import check_completeness
 from app.agent.tools.ambiguity import check_ambiguity
+from app.agent.tools.completeness import check_completeness
 from app.agent.tools.priority import suggest_priority
+
 
 class SampleToolInput(BaseModel):
     value: int
@@ -30,6 +32,7 @@ def isolate_tool_registry(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """每个测试使用独立注册表，避免测试互相影响。"""
+
     monkeypatch.setattr(
         registry,
         "_tool_registry",
@@ -64,6 +67,43 @@ def test_register_list_and_execute_tool() -> None:
     assert result == {
         "value": 10,
     }
+
+
+def test_list_function_tools_returns_json_schema() -> None:
+    @registry.register_tool(
+        name="sample_function_tool",
+        description="测试 Function Calling 工具",
+        input_model=SampleToolInput,
+        output_model=SampleToolOutput,
+    )
+    def sample_function_tool(
+        value: int,
+    ) -> dict[str, int]:
+        return {
+            "value": value,
+        }
+
+    tools = registry.list_function_tools()
+
+    assert len(tools) == 1
+
+    tool = tools[0]
+
+    assert tool["type"] == "function"
+    assert tool["function"]["name"] == "sample_function_tool"
+    assert (
+        tool["function"]["description"]
+        == "测试 Function Calling 工具"
+    )
+
+    parameters = tool["function"]["parameters"]
+
+    assert parameters["type"] == "object"
+    assert parameters["required"] == ["value"]
+    assert (
+        parameters["properties"]["value"]["type"]
+        == "integer"
+    )
 
 
 def test_duplicate_tool_name_raises_error() -> None:
@@ -160,6 +200,7 @@ def test_tool_input_must_match_schema() -> None:
             value="not-an-integer",
         )
 
+
 def test_completeness_check() -> None:
     incomplete_result = check_completeness(
         title="",
@@ -184,6 +225,7 @@ def test_completeness_check() -> None:
         "passed": True,
         "missing_fields": [],
     }
+
 
 def test_ambiguity_check_detects_ambiguous_terms() -> None:
     result = check_ambiguity(
@@ -210,6 +252,8 @@ def test_ambiguity_check_passes_clear_requirement() -> None:
         "passed": True,
         "matched_terms": [],
     }
+
+
 def test_priority_suggestion_returns_high_priority() -> None:
     result = suggest_priority(
         title="登录故障",
