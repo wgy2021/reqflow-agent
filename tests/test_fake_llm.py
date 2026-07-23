@@ -1,5 +1,5 @@
-import pytest
 from app.agent.llm import FakeLLMClient
+from app.agent.messages import ModelResponse
 
 
 AVAILABLE_TOOLS = [
@@ -110,14 +110,46 @@ def test_fake_llm_generates_report() -> None:
         "分析结论：包含模糊表达：尽快。"
     )
 
-def test_fake_llm_native_tool_call_not_implemented_yet() -> None:
-    client = FakeLLMClient()
+def test_fake_llm_returns_scripted_native_tool_call() -> None:
+    expected_response = ModelResponse.model_validate(
+        {
+            "model": "fake-model",
+            "finish_reason": "tool_calls",
+            "message": {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call_001",
+                        "type": "function",
+                        "function": {
+                            "name": "ambiguity_check",
+                            "arguments": (
+                                '{"content":"系统应尽快响应"}'
+                            ),
+                        },
+                    }
+                ],
+            },
+        }
+    )
 
-    with pytest.raises(
-        NotImplementedError,
-        match="native tool calling",
-    ):
-        client.generate_response(
-            messages=[],
-            tools=[],
-        )
+    client = FakeLLMClient(
+        scripted_responses=[expected_response],
+    )
+
+    response = client.generate_response(
+        messages=[
+            {
+                "role": "user",
+                "content": "检查这个需求",
+            }
+        ],
+        tools=[],
+    )
+
+    assert response == expected_response
+    assert (
+        response.message.tool_calls[0].function.name
+        == "ambiguity_check"
+    )
