@@ -1,3 +1,4 @@
+import pytest
 from app.agent.llm import FakeLLMClient
 
 
@@ -108,3 +109,15 @@ def test_fake_llm_generates_report() -> None:
         "已执行工具：completeness_check、ambiguity_check。"
         "分析结论：包含模糊表达：尽快。"
     )
+
+def test_fake_llm_native_tool_call_not_implemented_yet() -> None:
+    client = FakeLLMClient()
+
+    with pytest.raises(
+        NotImplementedError,
+        match="native tool calling",
+    ):
+        client.generate_response(
+            messages=[],
+            tools=[],
+        )
