@@ -1,3 +1,7 @@
+from app.agent.schemas import (
+    AmbiguityToolInput,
+    AmbiguityToolResult,
+)
 from typing import Any
 
 from app.agent.registry import register_tool
@@ -18,7 +22,9 @@ AMBIGUOUS_TERMS = [
 
 @register_tool(
     name="ambiguity_check",
-    description="检测需求内容中缺乏明确标准的模糊表达",
+    description="检查需求内容中是否包含模糊表达",
+    input_model=AmbiguityToolInput,
+    output_model=AmbiguityToolResult,
 )
 def check_ambiguity(
     content: str,

@@ -1,5 +1,9 @@
-from typing import Any
 
+from typing import Any
+from app.agent.schemas import (
+    PriorityToolInput,
+    PriorityToolResult,
+)
 from app.agent.registry import register_tool
 
 
@@ -27,6 +31,8 @@ MEDIUM_PRIORITY_KEYWORDS = [
 @register_tool(
     name="priority_suggestion",
     description="根据需求内容中的关键词建议需求优先级",
+    input_model=PriorityToolInput,
+    output_model=PriorityToolResult,
 )
 def suggest_priority(
     title: str,

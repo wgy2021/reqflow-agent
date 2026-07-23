@@ -1,5 +1,7 @@
+from pydantic import BaseModel
 from collections.abc import Callable
 from typing import Any
+
 
 
 ToolFunction = Callable[..., dict[str, Any]]
@@ -10,6 +12,8 @@ _tool_registry: dict[str, dict[str, Any]] = {}
 def register_tool(
     name: str,
     description: str,
+    input_model: type[BaseModel] | None = None,
+    output_model: type[BaseModel] | None = None,
 ) -> Callable[[ToolFunction], ToolFunction]:
     """把函数注册为 Agent 可以调用的工具。"""
 
@@ -22,6 +26,8 @@ def register_tool(
         _tool_registry[name] = {
             "name": name,
             "description": description,
+            "input_model": input_model,
+            "output_model": output_model,
             "function": func,
         }
 
