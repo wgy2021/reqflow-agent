@@ -1,9 +1,28 @@
 import pytest
-
+from pydantic import BaseModel, ValidationError
 from app.agent import registry
 from app.agent.tools.completeness import check_completeness
 from app.agent.tools.ambiguity import check_ambiguity
 from app.agent.tools.priority import suggest_priority
+
+class SampleToolInput(BaseModel):
+    value: int
+
+
+class SampleToolOutput(BaseModel):
+    value: int
+
+
+class EmptyToolInput(BaseModel):
+    pass
+
+
+class BooleanToolOutput(BaseModel):
+    ok: bool
+
+
+class InvalidToolOutput(BaseModel):
+    value: str
 
 
 @pytest.fixture(autouse=True)
@@ -22,6 +41,8 @@ def test_register_list_and_execute_tool() -> None:
     @registry.register_tool(
         name="sample_tool",
         description="测试工具",
+        input_model=SampleToolInput,
+        output_model=SampleToolOutput,
     )
     def sample_tool(value: int) -> dict[str, int]:
         return {
@@ -49,6 +70,8 @@ def test_duplicate_tool_name_raises_error() -> None:
     @registry.register_tool(
         name="duplicate_tool",
         description="第一个工具",
+        input_model=EmptyToolInput,
+        output_model=BooleanToolOutput,
     )
     def first_tool() -> dict[str, bool]:
         return {
@@ -59,10 +82,11 @@ def test_duplicate_tool_name_raises_error() -> None:
         ValueError,
         match="Tool already registered: duplicate_tool",
     ):
-
         @registry.register_tool(
             name="duplicate_tool",
             description="第二个工具",
+            input_model=EmptyToolInput,
+            output_model=BooleanToolOutput,
         )
         def second_tool() -> dict[str, bool]:
             return {
@@ -82,6 +106,8 @@ def test_tool_must_return_dictionary() -> None:
     @registry.register_tool(
         name="invalid_tool",
         description="返回值错误的工具",
+        input_model=EmptyToolInput,
+        output_model=InvalidToolOutput,
     )
     def invalid_tool():
         return "invalid result"
@@ -92,6 +118,47 @@ def test_tool_must_return_dictionary() -> None:
     ):
         registry.execute_tool("invalid_tool")
 
+
+def test_tool_output_must_match_schema() -> None:
+    @registry.register_tool(
+        name="invalid_output_tool",
+        description="返回字段类型错误的工具",
+        input_model=SampleToolInput,
+        output_model=SampleToolOutput,
+    )
+    def invalid_output_tool(
+        value: int,
+    ) -> dict[str, str]:
+        return {
+            "value": "not-an-integer",
+        }
+
+    with pytest.raises(ValidationError):
+        registry.execute_tool(
+            "invalid_output_tool",
+            value=10,
+        )
+
+
+def test_tool_input_must_match_schema() -> None:
+    @registry.register_tool(
+        name="invalid_input_tool",
+        description="输入字段类型错误的工具",
+        input_model=SampleToolInput,
+        output_model=SampleToolOutput,
+    )
+    def invalid_input_tool(
+        value: int,
+    ) -> dict[str, int]:
+        return {
+            "value": value,
+        }
+
+    with pytest.raises(ValidationError):
+        registry.execute_tool(
+            "invalid_input_tool",
+            value="not-an-integer",
+        )
 
 def test_completeness_check() -> None:
     incomplete_result = check_completeness(
