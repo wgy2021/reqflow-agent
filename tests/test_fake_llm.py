@@ -153,3 +153,59 @@ def test_fake_llm_returns_scripted_native_tool_call() -> None:
         response.message.tool_calls[0].function.name
         == "ambiguity_check"
     )
+
+def test_fake_llm_returns_responses_in_order() -> None:
+    tool_response = ModelResponse.model_validate(
+        {
+            "finish_reason": "tool_calls",
+            "message": {
+                "role": "assistant",
+                "tool_calls": [
+                    {
+                        "id": "call_001",
+                        "type": "function",
+                        "function": {
+                            "name": "completeness_check",
+                            "arguments": (
+                                '{"title":"登录","content":"用户登录"}'
+                            ),
+                        },
+                    }
+                ],
+            },
+        }
+    )
+
+    final_response = ModelResponse.model_validate(
+        {
+            "finish_reason": "stop",
+            "message": {
+                "role": "assistant",
+                "content": "需求分析完成。",
+            },
+        }
+    )
+
+    client = FakeLLMClient(
+        scripted_responses=[
+            tool_response,
+            final_response,
+        ],
+    )
+
+    first_response = client.generate_response(
+        messages=[],
+        tools=[],
+    )
+    second_response = client.generate_response(
+        messages=[],
+        tools=[],
+    )
+
+    assert first_response.finish_reason == "tool_calls"
+    assert (
+        first_response.message.tool_calls[0].function.name
+        == "completeness_check"
+    )
+    assert second_response.finish_reason == "stop"
+    assert second_response.message.content == "需求分析完成。"
