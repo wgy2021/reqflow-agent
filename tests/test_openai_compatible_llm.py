@@ -366,3 +366,96 @@ def test_openai_compatible_client_generates_report() -> None:
         "需求中包含“尽快”等模糊表达，"
         "建议补充明确的处理时限。"
     )
+
+
+def test_openai_compatible_client_generates_tool_call() -> None:
+    function_tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "ambiguity_check",
+                "description": "检测需求中的模糊表达",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "content": {
+                            "type": "string",
+                        }
+                    },
+                    "required": ["content"],
+                },
+            },
+        }
+    ]
+
+    def handle_request(
+        request: httpx.Request,
+    ) -> httpx.Response:
+        request_data = json.loads(request.content)
+
+        assert request_data["model"] == "test-model"
+        assert request_data["tool_choice"] == "auto"
+        assert request_data["tools"] == function_tools
+        assert request_data["messages"] == [
+            {
+                "role": "user",
+                "content": "检查需求是否清晰",
+            }
+        ]
+
+        return httpx.Response(
+            status_code=200,
+            json={
+                "model": "test-model",
+                "choices": [
+                    {
+                        "finish_reason": "tool_calls",
+                        "message": {
+                            "role": "assistant",
+                            "content": None,
+                            "tool_calls": [
+                                {
+                                    "id": "call_001",
+                                    "type": "function",
+                                    "function": {
+                                        "name": "ambiguity_check",
+                                        "arguments": (
+                                            '{"content":'
+                                            '"系统应尽快响应"}'
+                                        ),
+                                    },
+                                }
+                            ],
+                        },
+                    }
+                ],
+            },
+        )
+
+    client = OpenAICompatibleLLMClient(
+        api_key="test-key",
+        base_url="https://example.com/v1",
+        model="test-model",
+        transport=httpx.MockTransport(
+            handle_request
+        ),
+    )
+
+    response = client.generate_response(
+        messages=[
+            {
+                "role": "user",
+                "content": "检查需求是否清晰",
+            }
+        ],
+        tools=function_tools,
+    )
+
+    assert response.finish_reason == "tool_calls"
+    assert response.model == "test-model"
+    assert response.message.content is None
+    assert len(response.message.tool_calls) == 1
+    assert (
+        response.message.tool_calls[0].function.name
+        == "ambiguity_check"
+    )
