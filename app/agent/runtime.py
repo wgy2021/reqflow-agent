@@ -2,6 +2,9 @@ from typing import Any
 
 from app.agent.llm.base import LLMClient
 from app.agent.state import AgentState
+import json
+
+from app.agent.registry import execute_tool
 
 
 class AgentRuntime:
@@ -40,6 +43,42 @@ class AgentRuntime:
             state.tool_calls.extend(
                 response.message.tool_calls
             )
+
+            for tool_call in response.message.tool_calls:
+                arguments = json.loads(
+                    tool_call.function.arguments
+                )
+
+                if not isinstance(arguments, dict):
+                    raise ValueError(
+                        "Tool arguments must be a JSON object"
+                    )
+
+                result = execute_tool(
+                    tool_call.function.name,
+                    **arguments,
+                )
+
+                state.tool_results.append(
+                    {
+                        "tool_call_id": tool_call.id,
+                        "tool_name": tool_call.function.name,
+                        "result": result,
+                    }
+                )
+
+                state.messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "name": tool_call.function.name,
+                        "content": json.dumps(
+                            result,
+                            ensure_ascii=False,
+                        ),
+                    }
+                )
+
             return state
 
         if not response.message.content:
