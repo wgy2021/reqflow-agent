@@ -1,10 +1,19 @@
 from typing import Any
 
 from app.agent.llm.base import LLMClient
+from app.agent.messages import ModelResponse
 
 
 class FakeLLMClient(LLMClient):
     """根据简单规则模拟大模型选择工具。"""
+
+    def __init__(
+        self,
+        scripted_responses: list[ModelResponse] | None = None,
+    ) -> None:
+        self._scripted_responses = list(
+            scripted_responses or []
+        )
 
     def plan_tools(
         self,
@@ -74,6 +83,21 @@ class FakeLLMClient(LLMClient):
             planned_tools.append("priority_suggestion")
 
         return planned_tools
+
+    def generate_response(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+    ) -> ModelResponse:
+        """按预设顺序返回稳定的模型响应。"""
+
+        if not self._scripted_responses:
+            raise RuntimeError(
+                "Fake LLM has no scripted responses remaining"
+            )
+
+        return self._scripted_responses.pop(0)
+
     def generate_report(
         self,
         title: str,

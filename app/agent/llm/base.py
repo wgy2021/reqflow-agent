@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Any
+from app.agent.messages import ModelResponse
 
 
 class LLMClient(ABC):
@@ -16,6 +17,17 @@ class LLMClient(ABC):
         """根据需求和可用工具，返回准备调用的工具名称。"""
 
         raise NotImplementedError
+
+    def generate_response(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+    ) -> ModelResponse:
+        """接收消息和工具定义，返回统一模型响应。"""
+
+        raise NotImplementedError(
+            "This LLM client does not support native tool calling"
+        )
 
     def generate_report(
         self,

@@ -4,6 +4,7 @@ from typing import Any
 import httpx
 
 from app.agent.llm.base import LLMClient
+from app.agent.messages import ModelResponse
 
 
 class OpenAICompatibleLLMClient(LLMClient):
@@ -87,6 +88,126 @@ class OpenAICompatibleLLMClient(LLMClient):
         return self._parse_planned_tools(
             response=response,
         )
+
+    def generate_response(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+    ) -> ModelResponse:
+        """调用原生 Function Calling 接口。"""
+
+        request_payload: dict[str, Any] = {
+            "model": self.model,
+            "temperature": 0,
+            "thinking": {
+                "type": "disabled",
+            },
+            "messages": messages,
+        }
+        if tools:
+            request_payload["tools"] = tools
+            request_payload["tool_choice"] = "auto"
+
+        try:
+            with httpx.Client(
+                timeout=self.timeout,
+                transport=self.transport,
+            ) as client:
+                response = client.post(
+                    f"{self.base_url}/chat/completions",
+                    headers={
+                        "Authorization": (
+                            f"Bearer {self.api_key}"
+                        ),
+                        "Content-Type": "application/json",
+                    },
+                    json=request_payload,
+                )
+
+                response.raise_for_status()
+
+        except httpx.TimeoutException as exc:
+            raise RuntimeError(
+                "LLM request timed out"
+            ) from exc
+
+        except httpx.HTTPStatusError as exc:
+            raise RuntimeError(
+                "LLM request failed with status "
+                f"{exc.response.status_code}"
+            ) from exc
+
+        except httpx.RequestError as exc:
+            raise RuntimeError(
+                "LLM request failed"
+            ) from exc
+
+        return self._parse_model_response(response)
+
+    @staticmethod
+    def _parse_model_response(
+        response: httpx.Response,
+    ) -> ModelResponse:
+        """解析原生 assistant 消息和 tool_calls。"""
+
+        try:
+            response_data = response.json()
+            choice = response_data["choices"][0]
+            message = choice["message"]
+
+            raw_tool_calls = (
+                message.get("tool_calls") or []
+            )
+            normalized_tool_calls = []
+
+            for tool_call in raw_tool_calls:
+                function = tool_call["function"]
+                arguments = function["arguments"]
+
+                if not isinstance(arguments, str):
+                    arguments = json.dumps(
+                        arguments,
+                        ensure_ascii=False,
+                    )
+
+                normalized_tool_calls.append(
+                    {
+                        "id": tool_call["id"],
+                        "type": tool_call.get(
+                            "type",
+                            "function",
+                        ),
+                        "function": {
+                            "name": function["name"],
+                            "arguments": arguments,
+                        },
+                    }
+                )
+
+            return ModelResponse.model_validate(
+                {
+                    "model": response_data.get("model"),
+                    "finish_reason": choice.get(
+                        "finish_reason"
+                    ),
+                    "message": {
+                        "role": message["role"],
+                        "content": message.get("content"),
+                        "tool_calls": normalized_tool_calls,
+                    },
+                }
+            )
+
+        except (
+            ValueError,
+            KeyError,
+            IndexError,
+            TypeError,
+        ) as exc:
+            raise ValueError(
+                "Invalid native LLM response: "
+                f"{type(exc).__name__}: {exc}"
+            ) from exc
 
     def generate_report(
         self,
@@ -174,6 +295,7 @@ class OpenAICompatibleLLMClient(LLMClient):
         return self._parse_report(
             response=response,
         )
+
 
     def _build_request_payload(
         self,
