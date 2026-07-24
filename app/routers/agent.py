@@ -5,6 +5,7 @@ from fastapi import (
     HTTPException,
     status,
 )
+from sqlalchemy.orm import Session
 
 from app.agent.api_schemas import (
     AgentApprovalRequest,
@@ -16,11 +17,9 @@ from app.agent.llm import (
     get_llm_client,
 )
 from app.agent.registry import list_function_tools
-from app.agent.run_store import (
-    AgentRunStore,
-    agent_run_store,
-)
+from app.agent.run_repository import AgentRunRepository
 from app.agent.runtime import AgentRuntime
+from app.database import get_db
 
 
 router = APIRouter(
@@ -35,10 +34,12 @@ def provide_llm_client() -> LLMClient:
     return get_llm_client()
 
 
-def provide_run_store() -> AgentRunStore:
-    """为 Agent API 提供运行状态存储。"""
+def provide_run_repository(
+    db: Session = Depends(get_db),
+) -> AgentRunRepository:
+    """为 Agent API 提供数据库仓储。"""
 
-    return agent_run_store
+    return AgentRunRepository(db)
 
 
 @router.get(
@@ -46,14 +47,17 @@ def provide_run_store() -> AgentRunStore:
     response_model=list[AgentRunResponse],
 )
 def list_agent_runs(
-    run_store: AgentRunStore = Depends(
-        provide_run_store
+    run_repository: AgentRunRepository = Depends(
+        provide_run_repository
     ),
 ) -> list[AgentRunResponse]:
+    states = run_repository.list_all()
+
     return [
         AgentRunResponse.model_validate(state)
-        for state in run_store.list_all()
+        for state in states
     ]
+
 
 @router.post(
     "/runs",
@@ -65,8 +69,8 @@ def create_agent_run(
     llm_client: LLMClient = Depends(
         provide_llm_client
     ),
-    run_store: AgentRunStore = Depends(
-        provide_run_store
+    run_repository: AgentRunRepository = Depends(
+        provide_run_repository
     ),
 ) -> AgentRunResponse:
     runtime = AgentRuntime(
@@ -79,7 +83,7 @@ def create_agent_run(
         tools=list_function_tools(),
     )
 
-    run_store.save(
+    run_repository.save(
         state=state,
         max_steps=request.max_steps,
     )
@@ -93,11 +97,11 @@ def create_agent_run(
 )
 def get_agent_run(
     run_id: str,
-    run_store: AgentRunStore = Depends(
-        provide_run_store
+    run_repository: AgentRunRepository = Depends(
+        provide_run_repository
     ),
 ) -> AgentRunResponse:
-    state = run_store.get(run_id)
+    state = run_repository.get(run_id)
 
     if state is None:
         raise HTTPException(
@@ -106,6 +110,7 @@ def get_agent_run(
         )
 
     return AgentRunResponse.model_validate(state)
+
 
 @router.post(
     "/runs/{run_id}/approval",
@@ -117,11 +122,11 @@ def resolve_agent_approval(
     llm_client: LLMClient = Depends(
         provide_llm_client
     ),
-    run_store: AgentRunStore = Depends(
-        provide_run_store
+    run_repository: AgentRunRepository = Depends(
+        provide_run_repository
     ),
 ) -> AgentRunResponse:
-    state = run_store.get(run_id)
+    state = run_repository.get(run_id)
 
     if state is None:
         raise HTTPException(
@@ -132,14 +137,20 @@ def resolve_agent_approval(
     if state.status != "waiting_approval":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Agent run is not waiting for approval",
+            detail=(
+                "Agent run is not waiting for approval"
+            ),
         )
 
-    max_steps = run_store.get_max_steps(run_id)
+    max_steps = run_repository.get_max_steps(
+        run_id
+    )
 
     if max_steps is None:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=(
+                status.HTTP_500_INTERNAL_SERVER_ERROR
+            ),
             detail="Agent run configuration not found",
         )
 
@@ -154,7 +165,7 @@ def resolve_agent_approval(
         tools=list_function_tools(),
     )
 
-    run_store.save(
+    run_repository.save(
         state=state,
         max_steps=max_steps,
     )

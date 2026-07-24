@@ -5,17 +5,55 @@ from fastapi.testclient import TestClient
 
 from app.agent.llm import FakeLLMClient
 from app.agent.messages import ModelResponse
-from app.agent.run_store import agent_run_store
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from app.agent.run_repository import AgentRunRepository
+from app.database import Base
+from app.routers.agent import (
+    provide_llm_client,
+    provide_run_repository,
+)
 from app.main import app
 from app.routers.agent import provide_llm_client
 
+test_engine = create_engine(
+    "sqlite://",
+    connect_args={
+        "check_same_thread": False,
+    },
+    poolclass=StaticPool,
+)
+
+TestingSessionLocal = sessionmaker(
+    bind=test_engine,
+    autoflush=False,
+    expire_on_commit=False,
+)
 
 client = TestClient(app)
 
 
 @pytest.fixture(autouse=True)
-def reset_agent_run_store() -> None:
-    agent_run_store.clear()
+def override_agent_run_repository():
+    Base.metadata.drop_all(bind=test_engine)
+    Base.metadata.create_all(bind=test_engine)
+
+    def provide_test_repository():
+        with TestingSessionLocal() as db:
+            yield AgentRunRepository(db)
+
+    app.dependency_overrides[
+        provide_run_repository
+    ] = provide_test_repository
+
+    yield
+
+    app.dependency_overrides.pop(
+        provide_run_repository,
+        None,
+    )
 
 
 def test_create_agent_run_returns_completed_state() -> None:
