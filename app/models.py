@@ -209,3 +209,49 @@ class KnowledgeChunk(Base):
         nullable=False,
         server_default=func.now(),
     )
+
+
+class AgentRunRecord(Base):
+    """持久化保存 Agent 的运行状态。"""
+
+    __tablename__ = "agent_run_records"
+
+    run_id: Mapped[str] = mapped_column(
+        String(36),
+        primary_key=True,
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        index=True,
+    )
+
+    step_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+    )
+
+    max_steps: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    state_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON,
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
