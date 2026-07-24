@@ -24,17 +24,28 @@ class AgentRuntime:
 
     def run(
         self,
-        user_message: str,
+        user_message: str | None = None,
         tools: list[dict[str, Any]] | None = None,
+        state: AgentState | None = None,
     ) -> AgentState:
-        state = AgentState(
-            messages=[
-                {
-                    "role": "user",
-                    "content": user_message,
-                }
-            ]
-        )
+        if state is None:
+            if user_message is None:
+                raise ValueError(
+                    "user_message is required for a new run"
+                )
+
+            state = AgentState(
+                messages=[
+                    {
+                        "role": "user",
+                        "content": user_message,
+                    }
+                ]
+            )
+        elif state.status != "running":
+            raise ValueError(
+                "Agent state must be running"
+            )
 
         available_tools = tools or []
         seen_tool_calls: set[tuple[str, str]] = set()
@@ -290,3 +301,23 @@ class AgentRuntime:
             )
 
         return state
+    def resume_after_approval(
+        self,
+        state: AgentState,
+        approved: bool,
+        tools: list[dict[str, Any]] | None = None,
+    ) -> AgentState:
+        """处理审批并继续原来的 Agent 运行。"""
+
+        state = self.resolve_approval(
+            state=state,
+            approved=approved,
+        )
+
+        if state.status != "running":
+            return state
+
+        return self.run(
+            tools=tools,
+            state=state,
+        )

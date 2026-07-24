@@ -550,3 +550,60 @@ def test_agent_runtime_rejects_pending_tool() -> None:
     assert result_state.error == "Tool approval rejected"
     assert result_state.pending_tool_calls == []
     assert result_state.tool_results == []
+
+
+def test_agent_runtime_completes_after_approval() -> None:
+    tool_call = create_pending_tool_call()
+
+    final_response = ModelResponse.model_validate(
+        {
+            "finish_reason": "stop",
+            "message": {
+                "role": "assistant",
+                "content": "审批工具执行完成。",
+            },
+        }
+    )
+
+    state = AgentState(
+        status="waiting_approval",
+        step_count=1,
+        messages=[
+            {
+                "role": "user",
+                "content": "执行需要审批的工具",
+            },
+            {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    tool_call.model_dump(),
+                ],
+            },
+        ],
+        tool_calls=[tool_call],
+        pending_tool_calls=[tool_call],
+    )
+
+    client = FakeLLMClient(
+        scripted_responses=[final_response],
+    )
+    runtime = AgentRuntime(
+        llm_client=client,
+    )
+
+    result_state = runtime.resume_after_approval(
+        state=state,
+        approved=True,
+        tools=list_function_tools(),
+    )
+
+    assert result_state.status == "completed"
+    assert result_state.step_count == 2
+    assert result_state.pending_tool_calls == []
+    assert len(result_state.tool_results) == 1
+    assert (
+        result_state.final_answer
+        == "审批工具执行完成。"
+    )
+    assert result_state.messages[-1]["role"] == "assistant"
