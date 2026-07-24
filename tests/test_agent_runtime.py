@@ -1,8 +1,10 @@
+import app.agent.tools  # noqa: F401
+
 from app.agent.llm import FakeLLMClient
 from app.agent.messages import ModelResponse
-from app.agent.runtime import AgentRuntime
-import app.agent.tools  # noqa: F401
 from app.agent.registry import list_function_tools
+from app.agent.runtime import AgentRuntime
+
 
 def test_agent_runtime_completes_with_final_answer() -> None:
     final_response = ModelResponse.model_validate(
@@ -34,7 +36,8 @@ def test_agent_runtime_completes_with_final_answer() -> None:
     assert state.messages[1]["role"] == "assistant"
     assert state.tool_calls == []
 
-def test_agent_runtime_executes_tool_call() -> None:
+
+def test_agent_runtime_executes_tool_and_completes() -> None:
     tool_response = ModelResponse.model_validate(
         {
             "finish_reason": "tool_calls",
@@ -59,8 +62,21 @@ def test_agent_runtime_executes_tool_call() -> None:
         }
     )
 
+    final_response = ModelResponse.model_validate(
+        {
+            "finish_reason": "stop",
+            "message": {
+                "role": "assistant",
+                "content": "需求完整性检查已经完成。",
+            },
+        }
+    )
+
     client = FakeLLMClient(
-        scripted_responses=[tool_response],
+        scripted_responses=[
+            tool_response,
+            final_response,
+        ],
     )
     runtime = AgentRuntime(
         llm_client=client,
@@ -71,8 +87,12 @@ def test_agent_runtime_executes_tool_call() -> None:
         tools=list_function_tools(),
     )
 
-    assert state.status == "running"
-    assert state.step_count == 1
+    assert state.status == "completed"
+    assert state.step_count == 2
+    assert (
+        state.final_answer
+        == "需求完整性检查已经完成。"
+    )
     assert len(state.tool_calls) == 1
 
     assert state.tool_results == [
@@ -89,3 +109,4 @@ def test_agent_runtime_executes_tool_call() -> None:
 
     assert state.messages[2]["role"] == "tool"
     assert state.messages[2]["tool_call_id"] == "call_001"
+    assert state.messages[3]["role"] == "assistant"
