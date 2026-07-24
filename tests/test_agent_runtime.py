@@ -4,7 +4,7 @@ from app.agent.llm import FakeLLMClient
 from app.agent.messages import ModelResponse
 from app.agent.registry import list_function_tools
 from app.agent.runtime import AgentRuntime
-
+from types import SimpleNamespace
 
 def test_agent_runtime_completes_with_final_answer() -> None:
     final_response = ModelResponse.model_validate(
@@ -422,4 +422,52 @@ def test_agent_runtime_handles_tool_execution_failure(
             "Tool execution failed: "
             "completeness_check (RuntimeError)"
         )
+    )
+
+def test_agent_runtime_waits_for_tool_approval(
+    monkeypatch,
+) -> None:
+    response = ModelResponse.model_validate(
+        {
+            "finish_reason": "tool_calls",
+            "message": {
+                "role": "assistant",
+                "tool_calls": [
+                    {
+                        "id": "call_approval",
+                        "type": "function",
+                        "function": {
+                            "name": "dangerous_tool",
+                            "arguments": "{}",
+                        },
+                    }
+                ],
+            },
+        }
+    )
+
+    monkeypatch.setattr(
+        "app.agent.runtime.get_tool_spec",
+        lambda name: SimpleNamespace(
+            requires_approval=True,
+        ),
+    )
+
+    client = FakeLLMClient(
+        scripted_responses=[response],
+    )
+    runtime = AgentRuntime(llm_client=client)
+
+    state = runtime.run(
+        user_message="执行高风险操作",
+        tools=[],
+    )
+
+    assert state.status == "waiting_approval"
+    assert state.step_count == 1
+    assert len(state.tool_calls) == 1
+    assert state.tool_results == []
+    assert (
+        state.error
+        == "Approval required for tool: dangerous_tool"
     )

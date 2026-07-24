@@ -2,7 +2,7 @@ import json
 from typing import Any
 
 from app.agent.llm.base import LLMClient
-from app.agent.registry import execute_tool
+from app.agent.registry import execute_tool, get_tool_spec
 from app.agent.state import AgentState
 from pydantic import ValidationError
 
@@ -56,6 +56,29 @@ class AgentRuntime:
                 state.tool_calls.extend(
                     response.message.tool_calls
                 )
+
+                approval_tools: list[str] = []
+
+                for tool_call in response.message.tool_calls:
+                    tool_name = tool_call.function.name
+
+                    try:
+                        tool_spec = get_tool_spec(tool_name)
+                    except KeyError:
+                        state.status = "failed"
+                        state.error = f"Unknown tool: {tool_name}"
+                        return state
+
+                    if tool_spec.requires_approval:
+                        approval_tools.append(tool_name)
+
+                if approval_tools:
+                    state.status = "waiting_approval"
+                    state.error = (
+                            "Approval required for tool: "
+                            + ", ".join(approval_tools)
+                    )
+                    return state
 
                 for tool_call in response.message.tool_calls:
                     try:
