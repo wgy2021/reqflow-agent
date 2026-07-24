@@ -99,9 +99,11 @@ class OpenAICompatibleLLMClient(LLMClient):
         request_payload: dict[str, Any] = {
             "model": self.model,
             "temperature": 0,
+            "thinking": {
+                "type": "disabled",
+            },
             "messages": messages,
         }
-
         if tools:
             request_payload["tools"] = tools
             request_payload["tool_choice"] = "auto"
@@ -153,6 +155,35 @@ class OpenAICompatibleLLMClient(LLMClient):
             choice = response_data["choices"][0]
             message = choice["message"]
 
+            raw_tool_calls = (
+                message.get("tool_calls") or []
+            )
+            normalized_tool_calls = []
+
+            for tool_call in raw_tool_calls:
+                function = tool_call["function"]
+                arguments = function["arguments"]
+
+                if not isinstance(arguments, str):
+                    arguments = json.dumps(
+                        arguments,
+                        ensure_ascii=False,
+                    )
+
+                normalized_tool_calls.append(
+                    {
+                        "id": tool_call["id"],
+                        "type": tool_call.get(
+                            "type",
+                            "function",
+                        ),
+                        "function": {
+                            "name": function["name"],
+                            "arguments": arguments,
+                        },
+                    }
+                )
+
             return ModelResponse.model_validate(
                 {
                     "model": response_data.get("model"),
@@ -162,10 +193,7 @@ class OpenAICompatibleLLMClient(LLMClient):
                     "message": {
                         "role": message["role"],
                         "content": message.get("content"),
-                        "tool_calls": message.get(
-                            "tool_calls",
-                            [],
-                        ),
+                        "tool_calls": normalized_tool_calls,
                     },
                 }
             )
@@ -177,7 +205,8 @@ class OpenAICompatibleLLMClient(LLMClient):
             TypeError,
         ) as exc:
             raise ValueError(
-                "Invalid native LLM response"
+                "Invalid native LLM response: "
+                f"{type(exc).__name__}: {exc}"
             ) from exc
 
     def generate_report(

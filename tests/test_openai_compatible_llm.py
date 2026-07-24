@@ -415,6 +415,7 @@ def test_openai_compatible_client_generates_tool_call() -> None:
                             "content": None,
                             "tool_calls": [
                                 {
+                                    "index": 0,
                                     "id": "call_001",
                                     "type": "function",
                                     "function": {
