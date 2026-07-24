@@ -37,6 +37,7 @@ class AgentRuntime:
         )
 
         available_tools = tools or []
+        seen_tool_calls: set[tuple[str, str]] = set()
 
         while state.step_count < self.max_steps:
             response = self.llm_client.generate_response(
@@ -75,6 +76,24 @@ class AgentRuntime:
                             "Tool arguments must be a JSON object"
                         )
                         return state
+                    call_signature = (
+                        tool_call.function.name,
+                        json.dumps(
+                            arguments,
+                            ensure_ascii=False,
+                            sort_keys=True,
+                        ),
+                    )
+
+                    if call_signature in seen_tool_calls:
+                        state.status = "failed"
+                        state.error = (
+                            "Duplicate tool call detected: "
+                            f"{tool_call.function.name}"
+                        )
+                        return state
+
+                    seen_tool_calls.add(call_signature)
 
                     try:
                         result = execute_tool(

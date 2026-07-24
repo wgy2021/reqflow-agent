@@ -112,12 +112,11 @@ def test_agent_runtime_executes_tool_and_completes() -> None:
     assert state.messages[3]["role"] == "assistant"
 
 def test_agent_runtime_stops_at_max_steps() -> None:
-    tool_response = ModelResponse.model_validate(
+    first_response = ModelResponse.model_validate(
         {
             "finish_reason": "tool_calls",
             "message": {
                 "role": "assistant",
-                "content": None,
                 "tool_calls": [
                     {
                         "id": "call_001",
@@ -136,10 +135,33 @@ def test_agent_runtime_stops_at_max_steps() -> None:
         }
     )
 
+    second_response = ModelResponse.model_validate(
+        {
+            "finish_reason": "tool_calls",
+            "message": {
+                "role": "assistant",
+                "tool_calls": [
+                    {
+                        "id": "call_002",
+                        "type": "function",
+                        "function": {
+                            "name": "completeness_check",
+                            "arguments": (
+                                '{"title":"用户注册",'
+                                '"content":"用户可以注册账号",'
+                                '"priority":2}'
+                            ),
+                        },
+                    }
+                ],
+            },
+        }
+    )
+
     client = FakeLLMClient(
         scripted_responses=[
-            tool_response,
-            tool_response,
+            first_response,
+            second_response,
         ],
     )
     runtime = AgentRuntime(
@@ -274,3 +296,72 @@ def test_agent_runtime_fails_on_schema_validation() -> None:
         == "Invalid arguments for tool: completeness_check"
     )
     assert state.tool_results == []
+
+def test_agent_runtime_detects_duplicate_tool_call() -> None:
+    first_response = ModelResponse.model_validate(
+        {
+            "finish_reason": "tool_calls",
+            "message": {
+                "role": "assistant",
+                "tool_calls": [
+                    {
+                        "id": "call_001",
+                        "type": "function",
+                        "function": {
+                            "name": "completeness_check",
+                            "arguments": (
+                                '{"title":"登录",'
+                                '"content":"用户可以登录系统",'
+                                '"priority":1}'
+                            ),
+                        },
+                    }
+                ],
+            },
+        }
+    )
+
+    second_response = ModelResponse.model_validate(
+        {
+            "finish_reason": "tool_calls",
+            "message": {
+                "role": "assistant",
+                "tool_calls": [
+                    {
+                        "id": "call_002",
+                        "type": "function",
+                        "function": {
+                            "name": "completeness_check",
+                            "arguments": (
+                                '{"title":"登录",'
+                                '"content":"用户可以登录系统",'
+                                '"priority":1}'
+                            ),
+                        },
+                    }
+                ],
+            },
+        }
+    )
+
+    client = FakeLLMClient(
+        scripted_responses=[
+            first_response,
+            second_response,
+        ],
+    )
+    runtime = AgentRuntime(llm_client=client)
+
+    state = runtime.run(
+        user_message="检查需求",
+        tools=list_function_tools(),
+    )
+
+    assert state.status == "failed"
+    assert state.step_count == 2
+    assert (
+        state.error
+        == "Duplicate tool call detected: completeness_check"
+    )
+    assert len(state.tool_calls) == 2
+    assert len(state.tool_results) == 1
