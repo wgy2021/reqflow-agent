@@ -113,6 +113,14 @@ class AgentRuntime:
                             f"{tool_call.function.name}"
                         )
                         return state
+                    except Exception as exc:
+                        state.status = "failed"
+                        state.error = (
+                            "Tool execution failed: "
+                            f"{tool_call.function.name} "
+                            f"({type(exc).__name__})"
+                        )
+                        return state
                     state.tool_results.append(
                         {
                             "tool_call_id": tool_call.id,

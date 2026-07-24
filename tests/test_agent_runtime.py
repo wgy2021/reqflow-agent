@@ -365,3 +365,61 @@ def test_agent_runtime_detects_duplicate_tool_call() -> None:
     )
     assert len(state.tool_calls) == 2
     assert len(state.tool_results) == 1
+
+def test_agent_runtime_handles_tool_execution_failure(
+    monkeypatch,
+) -> None:
+    response = ModelResponse.model_validate(
+        {
+            "finish_reason": "tool_calls",
+            "message": {
+                "role": "assistant",
+                "tool_calls": [
+                    {
+                        "id": "call_failed",
+                        "type": "function",
+                        "function": {
+                            "name": "completeness_check",
+                            "arguments": (
+                                '{"title":"登录",'
+                                '"content":"用户可以登录系统",'
+                                '"priority":1}'
+                            ),
+                        },
+                    }
+                ],
+            },
+        }
+    )
+
+    def failing_execute_tool(
+        name: str,
+        **kwargs: object,
+    ) -> dict[str, object]:
+        raise RuntimeError("模拟工具执行失败")
+
+    monkeypatch.setattr(
+        "app.agent.runtime.execute_tool",
+        failing_execute_tool,
+    )
+
+    client = FakeLLMClient(
+        scripted_responses=[response],
+    )
+    runtime = AgentRuntime(llm_client=client)
+
+    state = runtime.run(
+        user_message="检查需求",
+        tools=list_function_tools(),
+    )
+
+    assert state.status == "failed"
+    assert state.step_count == 1
+    assert state.tool_results == []
+    assert (
+        state.error
+        == (
+            "Tool execution failed: "
+            "completeness_check (RuntimeError)"
+        )
+    )
