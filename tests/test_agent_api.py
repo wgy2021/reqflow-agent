@@ -212,3 +212,125 @@ def test_approve_agent_run_executes_tool_and_completes(
         response_data["final_answer"]
         == "审批工具执行完成。"
     )
+
+def test_reject_agent_run_stops_execution(
+    monkeypatch,
+) -> None:
+    tool_response = ModelResponse.model_validate(
+        {
+            "finish_reason": "tool_calls",
+            "message": {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call_001",
+                        "type": "function",
+                        "function": {
+                            "name": "completeness_check",
+                            "arguments": (
+                                '{"title":"用户登录",'
+                                '"content":"用户可以登录系统",'
+                                '"priority":1}'
+                            ),
+                        },
+                    }
+                ],
+            },
+        }
+    )
+
+    fake_client = FakeLLMClient(
+        scripted_responses=[tool_response],
+    )
+
+    monkeypatch.setattr(
+        "app.agent.runtime.get_tool_spec",
+        lambda name: SimpleNamespace(
+            requires_approval=True,
+        ),
+    )
+
+    app.dependency_overrides[
+        provide_llm_client
+    ] = lambda: fake_client
+
+    try:
+        create_response = client.post(
+            "/agent/runs",
+            json={
+                "message": "执行完整性检查",
+                "max_steps": 3,
+            },
+        )
+
+        run_id = create_response.json()["run_id"]
+
+        rejection_response = client.post(
+            f"/agent/runs/{run_id}/approval",
+            json={
+                "approved": False,
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(
+            provide_llm_client,
+            None,
+        )
+
+    assert rejection_response.status_code == 200
+
+    response_data = rejection_response.json()
+
+    assert response_data["status"] == "failed"
+    assert response_data["step_count"] == 1
+    assert response_data["pending_tool_calls"] == []
+    assert response_data["tool_results"] == []
+    assert response_data["final_answer"] is None
+    assert response_data["error"] == "Tool approval rejected"
+
+def test_approval_for_completed_run_returns_409() -> None:
+    final_response = ModelResponse.model_validate(
+        {
+            "finish_reason": "stop",
+            "message": {
+                "role": "assistant",
+                "content": "需求分析完成。",
+            },
+        }
+    )
+
+    app.dependency_overrides[
+        provide_llm_client
+    ] = lambda: FakeLLMClient(
+        scripted_responses=[final_response],
+    )
+
+    try:
+        create_response = client.post(
+            "/agent/runs",
+            json={
+                "message": "分析需求",
+            },
+        )
+
+        run_id = create_response.json()["run_id"]
+
+        approval_response = client.post(
+            f"/agent/runs/{run_id}/approval",
+            json={
+                "approved": True,
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(
+            provide_llm_client,
+            None,
+        )
+
+    assert approval_response.status_code == 409
+    assert approval_response.json() == {
+        "detail": (
+            "Agent run is not waiting for approval"
+        ),
+    }
