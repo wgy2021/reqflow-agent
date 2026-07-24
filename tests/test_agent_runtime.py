@@ -110,3 +110,51 @@ def test_agent_runtime_executes_tool_and_completes() -> None:
     assert state.messages[2]["role"] == "tool"
     assert state.messages[2]["tool_call_id"] == "call_001"
     assert state.messages[3]["role"] == "assistant"
+
+def test_agent_runtime_stops_at_max_steps() -> None:
+    tool_response = ModelResponse.model_validate(
+        {
+            "finish_reason": "tool_calls",
+            "message": {
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": "call_001",
+                        "type": "function",
+                        "function": {
+                            "name": "completeness_check",
+                            "arguments": (
+                                '{"title":"用户登录",'
+                                '"content":"用户可以登录系统",'
+                                '"priority":1}'
+                            ),
+                        },
+                    }
+                ],
+            },
+        }
+    )
+
+    client = FakeLLMClient(
+        scripted_responses=[
+            tool_response,
+            tool_response,
+        ],
+    )
+    runtime = AgentRuntime(
+        llm_client=client,
+        max_steps=2,
+    )
+
+    state = runtime.run(
+        user_message="持续检查需求",
+        tools=list_function_tools(),
+    )
+
+    assert state.status == "max_steps_exceeded"
+    assert state.step_count == 2
+    assert state.final_answer is None
+    assert state.error == "Agent exceeded maximum steps"
+    assert len(state.tool_calls) == 2
+    assert len(state.tool_results) == 2
