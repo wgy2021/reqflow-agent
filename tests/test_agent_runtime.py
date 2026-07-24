@@ -1,7 +1,8 @@
 import app.agent.tools  # noqa: F401
 
 from app.agent.llm import FakeLLMClient
-from app.agent.messages import ModelResponse
+from app.agent.messages import ModelResponse, ToolCall
+from app.agent.state import AgentState
 from app.agent.registry import list_function_tools
 from app.agent.runtime import AgentRuntime
 from types import SimpleNamespace
@@ -476,3 +477,76 @@ def test_agent_runtime_waits_for_tool_approval(
         state.error
         == "Approval required for tool: dangerous_tool"
     )
+
+def create_pending_tool_call() -> ToolCall:
+    return ToolCall.model_validate(
+        {
+            "id": "call_approval",
+            "type": "function",
+            "function": {
+                "name": "completeness_check",
+                "arguments": (
+                    '{"title":"用户登录",'
+                    '"content":"用户可以登录系统",'
+                    '"priority":1}'
+                ),
+            },
+        }
+    )
+
+
+def test_agent_runtime_executes_approved_tool() -> None:
+    tool_call = create_pending_tool_call()
+
+    state = AgentState(
+        status="waiting_approval",
+        step_count=1,
+        tool_calls=[tool_call],
+        pending_tool_calls=[tool_call],
+        error=(
+            "Approval required for tool: "
+            "completeness_check"
+        ),
+    )
+
+    runtime = AgentRuntime(
+        llm_client=FakeLLMClient(),
+    )
+
+    result_state = runtime.resolve_approval(
+        state=state,
+        approved=True,
+    )
+
+    assert result_state.status == "running"
+    assert result_state.step_count == 1
+    assert result_state.error is None
+    assert result_state.pending_tool_calls == []
+    assert len(result_state.tool_results) == 1
+    assert result_state.messages[-1]["role"] == "tool"
+
+
+def test_agent_runtime_rejects_pending_tool() -> None:
+    tool_call = create_pending_tool_call()
+
+    state = AgentState(
+        status="waiting_approval",
+        step_count=1,
+        tool_calls=[tool_call],
+        pending_tool_calls=[tool_call],
+    )
+
+    runtime = AgentRuntime(
+        llm_client=FakeLLMClient(),
+    )
+
+    result_state = runtime.resolve_approval(
+        state=state,
+        approved=False,
+    )
+
+    assert result_state.status == "failed"
+    assert result_state.step_count == 1
+    assert result_state.error == "Tool approval rejected"
+    assert result_state.pending_tool_calls == []
+    assert result_state.tool_results == []

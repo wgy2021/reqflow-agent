@@ -189,3 +189,104 @@ class AgentRuntime:
         state.error = "Agent exceeded maximum steps"
 
         return state
+    def resolve_approval(
+        self,
+        state: AgentState,
+        approved: bool,
+    ) -> AgentState:
+        """处理待审批工具调用。"""
+
+        if state.status != "waiting_approval":
+            raise ValueError(
+                "Agent is not waiting for approval"
+            )
+
+        if not state.pending_tool_calls:
+            raise ValueError(
+                "Agent has no pending tool calls"
+            )
+
+        if not approved:
+            state.pending_tool_calls.clear()
+            state.status = "failed"
+            state.error = "Tool approval rejected"
+            return state
+
+        pending_tool_calls = list(
+            state.pending_tool_calls
+        )
+        state.pending_tool_calls.clear()
+        state.status = "running"
+        state.error = None
+
+        for tool_call in pending_tool_calls:
+            try:
+                arguments = json.loads(
+                    tool_call.function.arguments
+                )
+            except json.JSONDecodeError:
+                state.status = "failed"
+                state.error = (
+                    "Invalid JSON arguments for tool: "
+                    f"{tool_call.function.name}"
+                )
+                return state
+
+            if not isinstance(arguments, dict):
+                state.status = "failed"
+                state.error = (
+                    "Tool arguments must be a JSON object"
+                )
+                return state
+
+            try:
+                result = execute_tool(
+                    tool_call.function.name,
+                    **arguments,
+                )
+            except KeyError:
+                state.status = "failed"
+                state.error = (
+                    f"Unknown tool: "
+                    f"{tool_call.function.name}"
+                )
+                return state
+            except ValidationError:
+                state.status = "failed"
+                state.error = (
+                    "Invalid arguments for tool: "
+                    f"{tool_call.function.name}"
+                )
+                return state
+            except Exception as exc:
+                state.status = "failed"
+                state.error = (
+                    "Tool execution failed: "
+                    f"{tool_call.function.name} "
+                    f"({type(exc).__name__})"
+                )
+                return state
+
+            state.tool_results.append(
+                {
+                    "tool_call_id": tool_call.id,
+                    "tool_name": (
+                        tool_call.function.name
+                    ),
+                    "result": result,
+                }
+            )
+
+            state.messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "name": tool_call.function.name,
+                    "content": json.dumps(
+                        result,
+                        ensure_ascii=False,
+                    ),
+                }
+            )
+
+        return state
