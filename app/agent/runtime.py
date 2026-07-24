@@ -4,7 +4,7 @@ from typing import Any
 from app.agent.llm.base import LLMClient
 from app.agent.registry import execute_tool
 from app.agent.state import AgentState
-
+from pydantic import ValidationError
 
 class AgentRuntime:
     """驱动 Agent 状态和模型响应。"""
@@ -76,11 +76,24 @@ class AgentRuntime:
                         )
                         return state
 
-                    result = execute_tool(
-                        tool_call.function.name,
-                        **arguments,
-                    )
-
+                    try:
+                        result = execute_tool(
+                            tool_call.function.name,
+                            **arguments,
+                        )
+                    except KeyError:
+                        state.status = "failed"
+                        state.error = (
+                            f"Unknown tool: {tool_call.function.name}"
+                        )
+                        return state
+                    except ValidationError:
+                        state.status = "failed"
+                        state.error = (
+                            "Invalid arguments for tool: "
+                            f"{tool_call.function.name}"
+                        )
+                        return state
                     state.tool_results.append(
                         {
                             "tool_call_id": tool_call.id,

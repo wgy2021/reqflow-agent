@@ -198,3 +198,79 @@ def test_agent_runtime_fails_on_invalid_json_arguments() -> None:
         state.error
         == "Invalid JSON arguments for tool: completeness_check"
     )
+
+def test_agent_runtime_fails_on_unknown_tool() -> None:
+    response = ModelResponse.model_validate(
+        {
+            "finish_reason": "tool_calls",
+            "message": {
+                "role": "assistant",
+                "tool_calls": [
+                    {
+                        "id": "call_unknown",
+                        "type": "function",
+                        "function": {
+                            "name": "missing_tool",
+                            "arguments": "{}",
+                        },
+                    }
+                ],
+            },
+        }
+    )
+
+    client = FakeLLMClient(
+        scripted_responses=[response],
+    )
+    runtime = AgentRuntime(llm_client=client)
+
+    state = runtime.run(
+        user_message="调用工具",
+        tools=list_function_tools(),
+    )
+
+    assert state.status == "failed"
+    assert state.error == "Unknown tool: missing_tool"
+    assert state.tool_results == []
+
+
+def test_agent_runtime_fails_on_schema_validation() -> None:
+    response = ModelResponse.model_validate(
+        {
+            "finish_reason": "tool_calls",
+            "message": {
+                "role": "assistant",
+                "tool_calls": [
+                    {
+                        "id": "call_invalid_input",
+                        "type": "function",
+                        "function": {
+                            "name": "completeness_check",
+                            "arguments": (
+                                '{"title":"登录",'
+                                '"content":"用户登录",'
+                                '"priority":99}'
+                            ),
+                        },
+                    }
+                ],
+            },
+        }
+    )
+
+    client = FakeLLMClient(
+        scripted_responses=[response],
+    )
+    runtime = AgentRuntime(llm_client=client)
+
+    state = runtime.run(
+        user_message="检查需求",
+        tools=list_function_tools(),
+    )
+
+    assert state.status == "failed"
+    assert (
+        state.error
+        == "Invalid arguments for tool: completeness_check"
+    )
+    assert state.tool_results == []
