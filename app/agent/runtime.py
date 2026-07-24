@@ -73,6 +73,9 @@ class AgentRuntime:
                         approval_tools.append(tool_name)
 
                 if approval_tools:
+                    state.pending_tool_calls.extend(
+                        response.message.tool_calls
+                    )
                     state.status = "waiting_approval"
                     state.error = (
                             "Approval required for tool: "

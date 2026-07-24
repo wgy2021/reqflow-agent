@@ -15,6 +15,7 @@ def test_agent_state_has_safe_defaults() -> None:
     assert state.tool_results == []
     assert state.final_answer is None
     assert state.error is None
+    assert state.pending_tool_calls == []
 
 
 def test_agent_state_can_be_completed() -> None:

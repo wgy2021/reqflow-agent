@@ -33,6 +33,9 @@ class AgentState(BaseModel):
     tool_calls: list[ToolCall] = Field(
         default_factory=list,
     )
+    pending_tool_calls: list[ToolCall] = Field(
+        default_factory=list,
+    )
     tool_results: list[dict[str, Any]] = Field(
         default_factory=list,
     )

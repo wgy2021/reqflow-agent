@@ -466,6 +466,11 @@ def test_agent_runtime_waits_for_tool_approval(
     assert state.status == "waiting_approval"
     assert state.step_count == 1
     assert len(state.tool_calls) == 1
+    assert len(state.pending_tool_calls) == 1
+    assert (
+            state.pending_tool_calls[0].function.name
+            == "dangerous_tool"
+    )
     assert state.tool_results == []
     assert (
         state.error
