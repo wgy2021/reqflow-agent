@@ -22,6 +22,15 @@ class AgentRunStore:
     ) -> AgentState | None:
         return self._runs.get(run_id)
 
+    def list_all(self) -> list[AgentState]:
+        """返回全部 Agent 运行，最新创建的在前。"""
+
+        return list(
+            reversed(
+                self._runs.values()
+            )
+        )
+
     def get_max_steps(
         self,
         run_id: str,

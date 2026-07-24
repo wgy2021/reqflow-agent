@@ -41,6 +41,20 @@ def provide_run_store() -> AgentRunStore:
     return agent_run_store
 
 
+@router.get(
+    "/runs",
+    response_model=list[AgentRunResponse],
+)
+def list_agent_runs(
+    run_store: AgentRunStore = Depends(
+        provide_run_store
+    ),
+) -> list[AgentRunResponse]:
+    return [
+        AgentRunResponse.model_validate(state)
+        for state in run_store.list_all()
+    ]
+
 @router.post(
     "/runs",
     response_model=AgentRunResponse,

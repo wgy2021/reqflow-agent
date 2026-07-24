@@ -1,18 +1,22 @@
+from types import SimpleNamespace
+
+import pytest
 from fastapi.testclient import TestClient
 
 from app.agent.llm import FakeLLMClient
 from app.agent.messages import ModelResponse
+from app.agent.run_store import agent_run_store
 from app.main import app
 from app.routers.agent import provide_llm_client
-import pytest
 
-from app.agent.run_store import agent_run_store
-from types import SimpleNamespace
 
 client = TestClient(app)
+
+
 @pytest.fixture(autouse=True)
 def reset_agent_run_store() -> None:
     agent_run_store.clear()
+
 
 def test_create_agent_run_returns_completed_state() -> None:
     final_response = ModelResponse.model_validate(
@@ -61,6 +65,7 @@ def test_create_agent_run_returns_completed_state() -> None:
     assert response_data["tool_results"] == []
     assert response_data["error"] is None
     assert "messages" not in response_data
+
 
 def test_get_agent_run_returns_saved_state() -> None:
     final_response = ModelResponse.model_validate(
@@ -112,8 +117,9 @@ def test_get_missing_agent_run_returns_404() -> None:
         "detail": "Agent run not found",
     }
 
+
 def test_approve_agent_run_executes_tool_and_completes(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     tool_response = ModelResponse.model_validate(
         {
@@ -213,8 +219,9 @@ def test_approve_agent_run_executes_tool_and_completes(
         == "审批工具执行完成。"
     )
 
+
 def test_reject_agent_run_stops_execution(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     tool_response = ModelResponse.model_validate(
         {
@@ -287,7 +294,11 @@ def test_reject_agent_run_stops_execution(
     assert response_data["pending_tool_calls"] == []
     assert response_data["tool_results"] == []
     assert response_data["final_answer"] is None
-    assert response_data["error"] == "Tool approval rejected"
+    assert (
+        response_data["error"]
+        == "Tool approval rejected"
+    )
+
 
 def test_approval_for_completed_run_returns_409() -> None:
     final_response = ModelResponse.model_validate(
@@ -334,3 +345,77 @@ def test_approval_for_completed_run_returns_409() -> None:
             "Agent run is not waiting for approval"
         ),
     }
+
+
+def test_list_agent_runs_returns_saved_runs() -> None:
+    responses = [
+        ModelResponse.model_validate(
+            {
+                "finish_reason": "stop",
+                "message": {
+                    "role": "assistant",
+                    "content": "第一次分析完成。",
+                },
+            }
+        ),
+        ModelResponse.model_validate(
+            {
+                "finish_reason": "stop",
+                "message": {
+                    "role": "assistant",
+                    "content": "第二次分析完成。",
+                },
+            }
+        ),
+    ]
+
+    fake_client = FakeLLMClient(
+        scripted_responses=responses,
+    )
+
+    app.dependency_overrides[
+        provide_llm_client
+    ] = lambda: fake_client
+
+    try:
+        first_response = client.post(
+            "/agent/runs",
+            json={
+                "message": "第一次分析",
+            },
+        )
+
+        second_response = client.post(
+            "/agent/runs",
+            json={
+                "message": "第二次分析",
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(
+            provide_llm_client,
+            None,
+        )
+
+    response = client.get("/agent/runs")
+
+    assert response.status_code == 200
+
+    response_data = response.json()
+
+    assert len(response_data) == 2
+    assert (
+        response_data[0]["run_id"]
+        == second_response.json()["run_id"]
+    )
+    assert (
+        response_data[1]["run_id"]
+        == first_response.json()["run_id"]
+    )
+
+
+def test_list_agent_runs_returns_empty_list() -> None:
+    response = client.get("/agent/runs")
+
+    assert response.status_code == 200
+    assert response.json() == []
