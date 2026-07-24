@@ -1,4 +1,60 @@
 <script setup>
+import { onMounted, ref } from 'vue'
+
+import { listAgentRuns } from '../api/agentRuns'
+
+const runs = ref([])
+const loading = ref(false)
+const errorMessage = ref('')
+
+const statusMap = {
+  completed: {
+    label: '已完成',
+    type: 'success',
+  },
+  running: {
+    label: '运行中',
+    type: 'primary',
+  },
+  waiting_approval: {
+    label: '等待审批',
+    type: 'warning',
+  },
+  failed: {
+    label: '执行失败',
+    type: 'danger',
+  },
+  max_steps_exceeded: {
+    label: '超过步数',
+    type: 'warning',
+  },
+}
+
+function getStatusLabel(status) {
+  return statusMap[status]?.label ?? status
+}
+
+function getStatusType(status) {
+  return statusMap[status]?.type ?? 'info'
+}
+
+async function loadRuns() {
+  loading.value = true
+  errorMessage.value = ''
+
+  try {
+    runs.value = await listAgentRuns()
+  } catch (error) {
+    errorMessage.value =
+      error instanceof Error
+        ? error.message
+        : '获取 Agent 运行记录失败'
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadRuns)
 </script>
 
 <template>
@@ -12,21 +68,95 @@
         </p>
       </div>
 
-      <el-button type="primary">
+      <el-button
+        type="primary"
+        :loading="loading"
+        @click="loadRuns"
+      >
         <el-icon><Refresh /></el-icon>
         刷新记录
       </el-button>
     </div>
 
-    <el-card shadow="never" class="placeholder-card">
-      <el-empty description="运行记录列表将在下一步接入">
-        <template #image>
-          <div class="empty-mark">
-            <el-icon><Operation /></el-icon>
-          </div>
-        </template>
-      </el-empty>
-    </el-card>
+    <el-card
+  v-loading="loading"
+  shadow="never"
+  class="placeholder-card"
+>
+  <el-alert
+    v-if="errorMessage"
+    :title="errorMessage"
+    type="error"
+    show-icon
+    :closable="false"
+  />
+
+  <el-empty
+    v-else-if="runs.length === 0"
+    description="暂无 Agent 运行记录"
+  >
+    <template #image>
+      <div class="empty-mark">
+        <el-icon><Operation /></el-icon>
+      </div>
+    </template>
+  </el-empty>
+
+  <el-table
+    v-else
+    :data="runs"
+    row-key="run_id"
+    style="width: 100%"
+  >
+    <el-table-column
+      label="运行 ID"
+      min-width="260"
+    >
+      <template #default="{ row }">
+        <code>{{ row.run_id }}</code>
+      </template>
+    </el-table-column>
+
+    <el-table-column
+      label="状态"
+      width="120"
+    >
+      <template #default="{ row }">
+        <el-tag
+          :type="getStatusType(row.status)"
+          effect="light"
+        >
+          {{ getStatusLabel(row.status) }}
+        </el-tag>
+      </template>
+    </el-table-column>
+
+    <el-table-column
+      prop="step_count"
+      label="执行步数"
+      width="110"
+    />
+
+    <el-table-column
+      label="工具结果"
+      width="110"
+    >
+      <template #default="{ row }">
+        {{ row.tool_results?.length ?? 0 }}
+      </template>
+    </el-table-column>
+
+    <el-table-column
+      label="最终回答"
+      min-width="320"
+      show-overflow-tooltip
+    >
+      <template #default="{ row }">
+        {{ row.final_answer || '—' }}
+      </template>
+    </el-table-column>
+  </el-table>
+</el-card>
   </section>
 </template>
 
