@@ -57,14 +57,24 @@ class AgentRuntime:
                 )
 
                 for tool_call in response.message.tool_calls:
-                    arguments = json.loads(
-                        tool_call.function.arguments
-                    )
+                    try:
+                        arguments = json.loads(
+                            tool_call.function.arguments
+                        )
+                    except json.JSONDecodeError:
+                        state.status = "failed"
+                        state.error = (
+                            "Invalid JSON arguments for tool: "
+                            f"{tool_call.function.name}"
+                        )
+                        return state
 
                     if not isinstance(arguments, dict):
-                        raise ValueError(
+                        state.status = "failed"
+                        state.error = (
                             "Tool arguments must be a JSON object"
                         )
+                        return state
 
                     result = execute_tool(
                         tool_call.function.name,

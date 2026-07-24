@@ -158,3 +158,43 @@ def test_agent_runtime_stops_at_max_steps() -> None:
     assert state.error == "Agent exceeded maximum steps"
     assert len(state.tool_calls) == 2
     assert len(state.tool_results) == 2
+
+def test_agent_runtime_fails_on_invalid_json_arguments() -> None:
+    invalid_response = ModelResponse.model_validate(
+        {
+            "finish_reason": "tool_calls",
+            "message": {
+                "role": "assistant",
+                "tool_calls": [
+                    {
+                        "id": "call_invalid",
+                        "type": "function",
+                        "function": {
+                            "name": "completeness_check",
+                            "arguments": '{"title":',
+                        },
+                    }
+                ],
+            },
+        }
+    )
+
+    client = FakeLLMClient(
+        scripted_responses=[invalid_response],
+    )
+    runtime = AgentRuntime(
+        llm_client=client,
+    )
+
+    state = runtime.run(
+        user_message="检查这个需求",
+        tools=list_function_tools(),
+    )
+
+    assert state.status == "failed"
+    assert state.step_count == 1
+    assert state.tool_results == []
+    assert (
+        state.error
+        == "Invalid JSON arguments for tool: completeness_check"
+    )
