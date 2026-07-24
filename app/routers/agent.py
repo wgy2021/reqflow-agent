@@ -7,6 +7,7 @@ from fastapi import (
 )
 
 from app.agent.api_schemas import (
+    AgentApprovalRequest,
     AgentRunRequest,
     AgentRunResponse,
 )
@@ -64,7 +65,10 @@ def create_agent_run(
         tools=list_function_tools(),
     )
 
-    run_store.save(state)
+    run_store.save(
+        state=state,
+        max_steps=request.max_steps,
+    )
 
     return AgentRunResponse.model_validate(state)
 
@@ -86,5 +90,59 @@ def get_agent_run(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Agent run not found",
         )
+
+    return AgentRunResponse.model_validate(state)
+
+@router.post(
+    "/runs/{run_id}/approval",
+    response_model=AgentRunResponse,
+)
+def resolve_agent_approval(
+    run_id: str,
+    approval: AgentApprovalRequest,
+    llm_client: LLMClient = Depends(
+        provide_llm_client
+    ),
+    run_store: AgentRunStore = Depends(
+        provide_run_store
+    ),
+) -> AgentRunResponse:
+    state = run_store.get(run_id)
+
+    if state is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent run not found",
+        )
+
+    if state.status != "waiting_approval":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Agent run is not waiting for approval",
+        )
+
+    max_steps = run_store.get_max_steps(run_id)
+
+    if max_steps is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Agent run configuration not found",
+        )
+
+    runtime = AgentRuntime(
+        llm_client=llm_client,
+        max_steps=max_steps,
+    )
+
+    state = runtime.resume_after_approval(
+        state=state,
+        approved=approval.approved,
+        tools=list_function_tools(),
+    )
+
+    run_store.save(
+        state=state,
+        max_steps=max_steps,
+    )
 
     return AgentRunResponse.model_validate(state)

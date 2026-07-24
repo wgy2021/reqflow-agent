@@ -40,6 +40,14 @@ class AgentRunRequest(BaseModel):
 
         return message
 
+class AgentApprovalRequest(BaseModel):
+    """批准或拒绝待执行的工具。"""
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+
+    approved: bool
 
 class AgentRunResponse(BaseModel):
     """一次 Agent 运行的对外响应。"""
