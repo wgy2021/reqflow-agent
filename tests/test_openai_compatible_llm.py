@@ -459,3 +459,58 @@ def test_openai_compatible_client_generates_tool_call() -> None:
         response.message.tool_calls[0].function.name
         == "ambiguity_check"
     )
+
+def test_openai_compatible_client_generates_final_answer() -> None:
+    def handle_request(
+        request: httpx.Request,
+    ) -> httpx.Response:
+        request_data = json.loads(request.content)
+
+        assert request_data["messages"] == [
+            {
+                "role": "user",
+                "content": "分析这个需求",
+            }
+        ]
+        assert "tools" not in request_data
+        assert "tool_choice" not in request_data
+
+        return httpx.Response(
+            status_code=200,
+            json={
+                "model": "test-model",
+                "choices": [
+                    {
+                        "finish_reason": "stop",
+                        "message": {
+                            "role": "assistant",
+                            "content": "需求分析已经完成。",
+                        },
+                    }
+                ],
+            },
+        )
+
+    client = OpenAICompatibleLLMClient(
+        api_key="test-key",
+        base_url="https://example.com/v1",
+        model="test-model",
+        transport=httpx.MockTransport(
+            handle_request
+        ),
+    )
+
+    response = client.generate_response(
+        messages=[
+            {
+                "role": "user",
+                "content": "分析这个需求",
+            }
+        ],
+        tools=[],
+    )
+
+    assert response.finish_reason == "stop"
+    assert response.model == "test-model"
+    assert response.message.content == "需求分析已经完成。"
+    assert response.message.tool_calls == []
