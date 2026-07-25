@@ -1,10 +1,17 @@
 <script setup>
 import { onMounted, ref } from 'vue'
+import MarkdownIt from 'markdown-it'
 
 import {
   listAgentRuns,
   resolveAgentApproval,
 } from '../api/agentRuns'
+
+const markdown = new MarkdownIt({
+  html: false,
+  linkify: true,
+  breaks: true,
+})
 
 const runs = ref([])
 const loading = ref(false)
@@ -54,6 +61,10 @@ function openRunDetail(run) {
 
 function formatJson(value) {
   return JSON.stringify(value ?? [], null, 2)
+}
+
+function renderMarkdown(value) {
+  return markdown.render(value || '暂无最终回答')
 }
 
 async function submitApproval(approved) {
@@ -317,9 +328,10 @@ onMounted(loadRuns)
         <section class="detail-section">
           <h3>最终回答</h3>
 
-          <div class="answer-box">
-            {{ selectedRun.final_answer || '暂无最终回答' }}
-          </div>
+          <div
+            class="answer-box markdown-body"
+            v-html="renderMarkdown(selectedRun.final_answer)"
+          />
         </section>
 
         <section
@@ -473,7 +485,6 @@ h2 {
   gap: 24px;
 }
 
-
 .approval-section {
   display: flex;
   flex-direction: column;
@@ -519,14 +530,134 @@ h2 {
 }
 
 .answer-box {
-  padding: 16px;
+  padding: 20px;
+  overflow-x: auto;
   border: 1px solid #e4e7ec;
   border-radius: 10px;
   background: #f8faf9;
   color: #344054;
+}
+
+:deep(.markdown-body > :first-child) {
+  margin-top: 0;
+}
+
+:deep(.markdown-body > :last-child) {
+  margin-bottom: 0;
+}
+
+:deep(.markdown-body h1),
+:deep(.markdown-body h2),
+:deep(.markdown-body h3),
+:deep(.markdown-body h4) {
+  margin: 24px 0 12px;
+  color: #172033;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+:deep(.markdown-body h1) {
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e4e7ec;
+  font-size: 24px;
+}
+
+:deep(.markdown-body h2) {
+  font-size: 20px;
+}
+
+:deep(.markdown-body h3) {
+  font-size: 17px;
+}
+
+:deep(.markdown-body h4) {
+  font-size: 15px;
+}
+
+:deep(.markdown-body p),
+:deep(.markdown-body li) {
+  color: #344054;
+  font-size: 14px;
   line-height: 1.8;
-  white-space: pre-wrap;
-  word-break: break-word;
+}
+
+:deep(.markdown-body ul),
+:deep(.markdown-body ol) {
+  margin: 12px 0;
+  padding-left: 24px;
+}
+
+:deep(.markdown-body table) {
+  width: 100%;
+  margin: 16px 0;
+  border-collapse: collapse;
+  background: #ffffff;
+}
+
+:deep(.markdown-body th),
+:deep(.markdown-body td) {
+  padding: 10px 12px;
+  border: 1px solid #dfe5e8;
+  text-align: left;
+  vertical-align: top;
+  line-height: 1.6;
+}
+
+:deep(.markdown-body th) {
+  background: #eef6f4;
+  color: #172033;
+  font-weight: 700;
+}
+
+:deep(.markdown-body blockquote) {
+  margin: 16px 0;
+  padding: 12px 16px;
+  border-left: 4px solid #0f766e;
+  background: #eef6f4;
+  color: #475467;
+}
+
+:deep(.markdown-body code) {
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: #e8efed;
+  color: #0f5f59;
+  font-family:
+    Consolas,
+    "Courier New",
+    monospace;
+  font-size: 12px;
+}
+
+:deep(.markdown-body pre) {
+  margin: 16px 0;
+  padding: 16px;
+  overflow-x: auto;
+  border-radius: 10px;
+  background: #172033;
+}
+
+:deep(.markdown-body pre code) {
+  padding: 0;
+  background: transparent;
+  color: #e7f3f1;
+  line-height: 1.7;
+}
+
+:deep(.markdown-body a) {
+  color: #0f766e;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+:deep(.markdown-body a:hover) {
+  text-decoration: underline;
+}
+
+:deep(.markdown-body hr) {
+  margin: 24px 0;
+  border: 0;
+  border-top: 1px solid #e4e7ec;
 }
 
 .section-count {
