@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import MarkdownIt from 'markdown-it'
 
 import {
+  createAgentRun,
   listAgentRuns,
   resolveAgentApproval,
 } from '../api/agentRuns'
@@ -21,7 +22,14 @@ const detailVisible = ref(false)
 const selectedRun = ref(null)
 const approvalLoading = ref(false)
 const approvalError = ref('')
+const createVisible = ref(false)
+const createLoading = ref(false)
+const createError = ref('')
 
+const createForm = ref({
+  message: '',
+  maxSteps: 5,
+})
 const statusMap = {
   completed: {
     label: '已完成',
@@ -65,6 +73,53 @@ function formatJson(value) {
 
 function renderMarkdown(value) {
   return markdown.render(value || '暂无最终回答')
+}
+
+function openCreateDialog() {
+  createError.value = ''
+
+  createForm.value = {
+    message: '',
+    maxSteps: 5,
+  }
+
+  createVisible.value = true
+}
+
+async function submitCreate() {
+  const message = createForm.value.message.trim()
+
+  if (!message) {
+    createError.value = '请输入要交给 Agent 分析的需求'
+    return
+  }
+
+  createLoading.value = true
+  createError.value = ''
+
+  try {
+    const newRun = await createAgentRun(
+      message,
+      createForm.value.maxSteps,
+    )
+
+    runs.value = [
+      newRun,
+      ...runs.value.filter(
+        (run) => run.run_id !== newRun.run_id,
+      ),
+    ]
+
+    createVisible.value = false
+    openRunDetail(newRun)
+  } catch (error) {
+    createError.value =
+      error instanceof Error
+        ? error.message
+        : '创建 Agent 运行失败'
+  } finally {
+    createLoading.value = false
+  }
 }
 
 async function submitApproval(approved) {
@@ -132,6 +187,15 @@ onMounted(loadRuns)
         </p>
       </div>
 
+      <div class="heading-actions">
+  <el-button @click="openCreateDialog">
+        <el-icon>
+          <Plus />
+        </el-icon>
+
+        新建运行
+      </el-button>
+
       <el-button
         type="primary"
         :loading="loading"
@@ -143,6 +207,7 @@ onMounted(loadRuns)
 
         刷新记录
       </el-button>
+    </div>
     </div>
 
     <el-card
@@ -245,7 +310,73 @@ onMounted(loadRuns)
         </el-table-column>
       </el-table>
     </el-card>
+        <el-dialog
+      v-model="createVisible"
+      title="新建 Agent 运行"
+      width="560px"
+      :close-on-click-modal="!createLoading"
+      :close-on-press-escape="!createLoading"
+    >
+      <el-form
+        label-position="top"
+        class="create-form"
+      >
+        <el-form-item
+          label="需求内容"
+          required
+        >
+          <el-input
+            v-model="createForm.message"
+            type="textarea"
+            :rows="7"
+            maxlength="2000"
+            show-word-limit
+            placeholder="例如：用户登录连续失败 5 次后锁定账号 30 分钟，并记录安全日志，优先级为 1。"
+            :disabled="createLoading"
+          />
+        </el-form-item>
 
+        <el-form-item label="最大执行步数">
+          <el-input-number
+            v-model="createForm.maxSteps"
+            :min="1"
+            :max="20"
+            :step="1"
+            controls-position="right"
+            :disabled="createLoading"
+          />
+
+          <p class="form-help">
+            限制 Agent 本次运行最多执行多少个步骤，默认值为 5。
+          </p>
+        </el-form-item>
+
+        <el-alert
+          v-if="createError"
+          :title="createError"
+          type="error"
+          show-icon
+          :closable="false"
+        />
+      </el-form>
+
+      <template #footer>
+        <el-button
+          :disabled="createLoading"
+          @click="createVisible = false"
+        >
+          取消
+        </el-button>
+
+        <el-button
+          type="primary"
+          :loading="createLoading"
+          @click="submitCreate"
+        >
+          启动 Agent
+        </el-button>
+      </template>
+    </el-dialog>
     <el-drawer
       v-model="detailVisible"
       title="Agent 运行详情"
@@ -411,6 +542,11 @@ onMounted(loadRuns)
   gap: 24px;
   margin: 0;
 }
+.heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 
 .eyebrow {
   margin: 0 0 8px;
@@ -536,6 +672,17 @@ h2 {
   border-radius: 10px;
   background: #f8faf9;
   color: #344054;
+}
+.create-form {
+  padding-top: 4px;
+}
+
+.form-help {
+  width: 100%;
+  margin: 8px 0 0;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 :deep(.markdown-body > :first-child) {
