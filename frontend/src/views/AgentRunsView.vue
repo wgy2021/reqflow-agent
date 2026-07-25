@@ -1,7 +1,10 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 
-import { listAgentRuns } from '../api/agentRuns'
+import {
+  listAgentRuns,
+  resolveAgentApproval,
+} from '../api/agentRuns'
 
 const runs = ref([])
 const loading = ref(false)
@@ -9,6 +12,8 @@ const errorMessage = ref('')
 
 const detailVisible = ref(false)
 const selectedRun = ref(null)
+const approvalLoading = ref(false)
+const approvalError = ref('')
 
 const statusMap = {
   completed: {
@@ -43,11 +48,43 @@ function getStatusType(status) {
 
 function openRunDetail(run) {
   selectedRun.value = run
+  approvalError.value = ''
   detailVisible.value = true
 }
 
 function formatJson(value) {
   return JSON.stringify(value ?? [], null, 2)
+}
+
+async function submitApproval(approved) {
+  if (!selectedRun.value) {
+    return
+  }
+
+  approvalLoading.value = true
+  approvalError.value = ''
+
+  try {
+    const updatedRun = await resolveAgentApproval(
+      selectedRun.value.run_id,
+      approved,
+    )
+
+    selectedRun.value = updatedRun
+
+    runs.value = runs.value.map((run) =>
+      run.run_id === updatedRun.run_id
+        ? updatedRun
+        : run,
+    )
+  } catch (error) {
+    approvalError.value =
+      error instanceof Error
+        ? error.message
+        : '处理 Agent 审批失败'
+  } finally {
+    approvalLoading.value = false
+  }
 }
 
 async function loadRuns() {
@@ -236,6 +273,47 @@ onMounted(loadRuns)
           </el-descriptions-item>
         </el-descriptions>
 
+        <section
+          v-if="selectedRun.status === 'waiting_approval'"
+          class="approval-section"
+        >
+          <div>
+            <h3>工具执行审批</h3>
+
+            <p>
+              当前 Agent 正在等待人工确认。批准后将继续执行待审批工具；
+              拒绝后本次运行将终止。
+            </p>
+          </div>
+
+          <el-alert
+            v-if="approvalError"
+            :title="approvalError"
+            type="error"
+            show-icon
+            :closable="false"
+          />
+
+          <div class="approval-actions">
+            <el-button
+              type="danger"
+              plain
+              :loading="approvalLoading"
+              @click="submitApproval(false)"
+            >
+              拒绝执行
+            </el-button>
+
+            <el-button
+              type="primary"
+              :loading="approvalLoading"
+              @click="submitApproval(true)"
+            >
+              批准执行
+            </el-button>
+          </div>
+        </section>
+
         <section class="detail-section">
           <h3>最终回答</h3>
 
@@ -393,6 +471,37 @@ h2 {
   display: flex;
   flex-direction: column;
   gap: 24px;
+}
+
+
+.approval-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid #f5d38a;
+  border-radius: 12px;
+  background: #fffbeb;
+}
+
+.approval-section h3 {
+  margin: 0;
+  color: #92400e;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.approval-section p {
+  margin: 8px 0 0;
+  color: #92400e;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.approval-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }
 
 .detail-section {

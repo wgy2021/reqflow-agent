@@ -28,3 +28,20 @@ async function requestJson(url, options = {}) {
 export function listAgentRuns() {
   return requestJson(AGENT_RUNS_API)
 }
+
+export function resolveAgentApproval(runId, approved) {
+  const encodedRunId = encodeURIComponent(runId)
+
+  return requestJson(
+    `${AGENT_RUNS_API}/${encodedRunId}/approval`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        approved,
+      }),
+    },
+  )
+}
