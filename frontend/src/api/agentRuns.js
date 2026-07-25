@@ -45,3 +45,15 @@ export function resolveAgentApproval(runId, approved) {
     },
   )
 }
+export function createAgentRun(message, maxSteps = 5) {
+  return requestJson(AGENT_RUNS_API, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      message,
+      max_steps: maxSteps,
+    }),
+  })
+}
