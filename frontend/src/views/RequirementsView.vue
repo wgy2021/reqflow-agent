@@ -22,6 +22,10 @@ const props = defineProps({
     type: Number,
     default: null,
   },
+  agentRunningRequirementId: {
+    type: [Number, String],
+    default: null,
+  },
 })
 
 const emit = defineEmits([
@@ -29,9 +33,9 @@ const emit = defineEmits([
   'refresh',
   'open-detail',
   'analyze',
+  'run-agent',
   'pending',
 ])
-
 const keyword = ref('')
 const priorityFilter = ref(null)
 
@@ -257,28 +261,57 @@ function getPriorityType(priority) {
 
         <el-table-column
           label="操作"
-          width="180"
+          width="270"
           fixed="right"
+          align="right"
         >
           <template #default="{ row }">
-            <el-button
-              link
-              type="primary"
-              @click="emit('open-detail', row)"
-            >
-              <el-icon><View /></el-icon>
-              查看
-            </el-button>
+            <div class="requirement-actions">
+              <el-button
+                link
+                class="action-link"
+                @click="emit('open-detail', row)"
+              >
+                <el-icon><View /></el-icon>
+                查看
+              </el-button>
 
-            <el-button
-              link
-              type="primary"
-              :loading="analyzingRequirementId === row.id"
-              @click="emit('analyze', row)"
-            >
-              <el-icon><MagicStick /></el-icon>
-              分析
-            </el-button>
+              <el-button
+                link
+                class="action-link action-link--analysis"
+                :loading="analyzingRequirementId === row.id"
+                :disabled="agentRunningRequirementId !== null"
+                @click="emit('analyze', row)"
+              >
+                <el-icon><MagicStick /></el-icon>
+                分析
+              </el-button>
+
+              <el-button
+                type="primary"
+                size="small"
+                class="agent-run-button"
+                :loading="agentRunningRequirementId === row.id"
+                :disabled="
+                  analyzingRequirementId !== null ||
+                  (agentRunningRequirementId !== null &&
+                    agentRunningRequirementId !== row.id)
+                "
+                @click="emit('run-agent', row)"
+              >
+                <el-icon
+                  v-if="agentRunningRequirementId !== row.id"
+                >
+                  <Operation />
+                </el-icon>
+
+                {{
+                  agentRunningRequirementId === row.id
+                    ? '分析中…'
+                    : 'Agent 分析'
+                }}
+              </el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -690,6 +723,62 @@ function getPriorityType(priority) {
 .start-button {
   width: 100%;
   margin-top: 18px;
+}
+
+.requirement-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.requirement-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+.action-link {
+  min-width: auto;
+  padding: 6px 7px;
+  border-radius: 6px;
+  color: #475467;
+  font-weight: 500;
+}
+
+.action-link:hover,
+.action-link:focus {
+  color: #0f766e;
+  background: #eef6f4;
+}
+
+.action-link--analysis {
+  color: #0f766e;
+}
+
+.agent-run-button {
+  min-width: 104px;
+  height: 30px;
+  margin-left: 4px;
+  padding: 0 12px;
+  border-color: #0f766e;
+  background: #0f766e;
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
+}
+
+.agent-run-button:hover,
+.agent-run-button:focus {
+  border-color: #115e59;
+  background: #115e59;
+  color: #ffffff;
+}
+
+.agent-run-button.is-disabled,
+.agent-run-button.is-disabled:hover {
+  border-color: #b7d4cf;
+  background: #b7d4cf;
+  color: #ffffff;
 }
 
 @media (max-width: 1250px) {
