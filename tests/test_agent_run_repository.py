@@ -13,7 +13,7 @@ from app.agent.run_repository import (
 )
 from app.agent.state import AgentState
 from app.database import Base
-from app.models import AgentRunRecord
+from app.models import AgentRunRecord, Requirement
 
 
 test_engine = create_engine(
@@ -155,6 +155,70 @@ def test_list_agent_runs_newest_first(
     db.commit()
 
     states = repository.list_all()
+
+    assert [
+        state.run_id
+        for state in states
+    ] == [
+        second_state.run_id,
+        first_state.run_id,
+    ]
+
+def test_list_agent_runs_by_requirement_id(
+    db: Session,
+) -> None:
+    repository = AgentRunRepository(db)
+
+    first_requirement = Requirement(
+        title="需求一",
+        content="需求一的内容",
+        priority=1,
+    )
+    second_requirement = Requirement(
+        title="需求二",
+        content="需求二的内容",
+        priority=2,
+    )
+
+    db.add_all(
+        [
+            first_requirement,
+            second_requirement,
+        ]
+    )
+    db.commit()
+    db.refresh(first_requirement)
+    db.refresh(second_requirement)
+
+    first_state = AgentState(
+        final_answer="需求一第一次运行",
+    )
+    other_state = AgentState(
+        final_answer="需求二的运行",
+    )
+    second_state = AgentState(
+        final_answer="需求一第二次运行",
+    )
+
+    repository.save(
+        state=first_state,
+        max_steps=5,
+        requirement_id=first_requirement.id,
+    )
+    repository.save(
+        state=other_state,
+        max_steps=5,
+        requirement_id=second_requirement.id,
+    )
+    repository.save(
+        state=second_state,
+        max_steps=5,
+        requirement_id=first_requirement.id,
+    )
+
+    states = repository.list_by_requirement_id(
+        first_requirement.id
+    )
 
     assert [
         state.run_id

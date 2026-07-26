@@ -3,6 +3,7 @@ from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
+    Query,
     status,
 )
 from sqlalchemy.orm import Session
@@ -47,11 +48,20 @@ def provide_run_repository(
     response_model=list[AgentRunResponse],
 )
 def list_agent_runs(
+    requirement_id: int | None = Query(
+        default=None,
+        ge=1,
+    ),
     run_repository: AgentRunRepository = Depends(
         provide_run_repository
     ),
 ) -> list[AgentRunResponse]:
-    states = run_repository.list_all()
+    if requirement_id is None:
+        states = run_repository.list_all()
+    else:
+        states = run_repository.list_by_requirement_id(
+            requirement_id
+        )
 
     return [
         AgentRunResponse.model_validate(state)

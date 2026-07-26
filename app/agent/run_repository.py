@@ -88,6 +88,31 @@ class AgentRunRepository:
             for record in records
         ]
 
+    def list_by_requirement_id(
+            self,
+            requirement_id: int,
+    ) -> list[AgentState]:
+        statement = (
+            select(AgentRunRecord)
+            .where(
+                AgentRunRecord.requirement_id == requirement_id
+            )
+            .order_by(
+                AgentRunRecord.created_at.desc()
+            )
+        )
+
+        records = self._db.scalars(
+            statement
+        ).all()
+
+        return [
+            AgentState.model_validate(
+                record.state_json
+            )
+            for record in records
+        ]
+
     def get_max_steps(
         self,
         run_id: str,

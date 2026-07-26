@@ -393,6 +393,9 @@ async function runRequirementAgent(requirement) {
 
     await router.push({
       name: 'agent-runs',
+      query: {
+        requirement_id: String(requirement.id),
+      },
     })
   } catch (error) {
     loadingMessage.close()
@@ -408,6 +411,18 @@ async function runRequirementAgent(requirement) {
     agentRunningRequirementId.value = null
   }
 }
+
+async function openRequirementAgentHistory(requirement) {
+  detailDrawerVisible.value = false
+
+  await router.push({
+    name: 'agent-runs',
+    query: {
+      requirement_id: String(requirement.id),
+    },
+  })
+}
+
 function resetCreateForm() {
   createForm.title = ''
   createForm.content = ''
@@ -800,6 +815,7 @@ onMounted(async () => {
             @open-detail="openDetailDrawer"
             @analyze="runAnalysis"
             @run-agent="runRequirementAgent"
+            @view-agent-history="openRequirementAgentHistory"
             @pending="showPendingMessage"
           />
 
@@ -1143,6 +1159,15 @@ onMounted(async () => {
           <div class="detail-actions-right">
             <el-button @click="detailDrawerVisible = false">
               关闭
+            </el-button>
+
+            <el-button
+              @click="
+                openRequirementAgentHistory(selectedRequirement)
+              "
+            >
+              <el-icon><Clock /></el-icon>
+              运行历史
             </el-button>
 
             <el-button
