@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-
+import { createAgentRun } from './api/agentRuns'
 import {
   analyzeRequirement as requestRequirementAnalysis,
   createRequirement as requestCreateRequirement,
@@ -42,6 +42,7 @@ const analysisError = ref('')
 const analysisResult = ref(null)
 const analysisRequirement = ref(null)
 const analyzingRequirementId = ref(null)
+const agentRunningRequirementId = ref(null)
 const analysisResultsByRequirement = ref({})
 const analysisViewMode = ref('live')
 
@@ -350,7 +351,59 @@ async function loadData() {
 function showPendingMessage(featureName) {
   ElMessage.info(`${featureName}将在下一步接入。`)
 }
+async function runRequirementAgent(requirement) {
+  if (agentRunningRequirementId.value !== null) {
+    return
+  }
 
+  agentRunningRequirementId.value = requirement.id
+
+  const loadingMessage = ElMessage({
+    message: 'Agent 正在分析，请稍候……',
+    type: 'info',
+    duration: 0,
+    showClose: false,
+  })
+
+  const priorityLabel =
+    {
+      1: 'P1（最高）',
+      2: 'P2（中）',
+      3: 'P3（低）',
+    }[requirement.priority] ??
+    `P${requirement.priority}`
+
+  const message = [
+    `需求标题：${requirement.title}`,
+    `需求内容：${requirement.content}`,
+    `需求优先级：${priorityLabel}`,
+    '',
+    '请执行完整性检查、歧义检查和优先级建议，并生成结构化需求分析报告。',
+  ].join('\n')
+
+  try {
+    await createAgentRun(message, 5)
+
+    loadingMessage.close()
+    ElMessage.success('Agent 分析完成，正在打开运行记录')
+
+    await router.push({
+      name: 'agent-runs',
+    })
+  } catch (error) {
+    loadingMessage.close()
+
+    ElMessage.error(
+      error instanceof Error
+        ? error.message
+        : 'Agent 分析失败，请检查后端服务和模型配置。',
+    )
+
+    console.error(error)
+  } finally {
+    agentRunningRequirementId.value = null
+  }
+}
 function resetCreateForm() {
   createForm.title = ''
   createForm.content = ''
@@ -735,10 +788,14 @@ onMounted(async () => {
             :analyzing-requirement-id="
               analyzingRequirementId
             "
+            :agent-running-requirement-id="
+              agentRunningRequirementId
+            "
             @open-create="openCreateDialog"
             @refresh="loadData"
             @open-detail="openDetailDrawer"
             @analyze="runAnalysis"
+            @run-agent="runRequirementAgent"
             @pending="showPendingMessage"
           />
 
