@@ -382,7 +382,11 @@ async function runRequirementAgent(requirement) {
   ].join('\n')
 
   try {
-    await createAgentRun(message, 5)
+    await createAgentRun(
+      message,
+      5,
+      requirement.id,
+    )
 
     loadingMessage.close()
     ElMessage.success('Agent 分析完成，正在打开运行记录')
