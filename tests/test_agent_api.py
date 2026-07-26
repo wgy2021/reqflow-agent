@@ -510,3 +510,117 @@ def test_create_agent_run_saves_requirement_id() -> None:
 
         assert record is not None
         assert record.requirement_id == requirement_id
+
+def test_list_agent_runs_filters_by_requirement_id() -> None:
+    with TestingSessionLocal() as db:
+        first_requirement = Requirement(
+            title="需求一",
+            content="需求一的内容",
+            priority=1,
+        )
+        second_requirement = Requirement(
+            title="需求二",
+            content="需求二的内容",
+            priority=2,
+        )
+
+        db.add_all(
+            [
+                first_requirement,
+                second_requirement,
+            ]
+        )
+        db.commit()
+        db.refresh(first_requirement)
+        db.refresh(second_requirement)
+
+        first_requirement_id = first_requirement.id
+        second_requirement_id = second_requirement.id
+
+    responses = [
+        ModelResponse.model_validate(
+            {
+                "finish_reason": "stop",
+                "message": {
+                    "role": "assistant",
+                    "content": "需求一第一次运行",
+                },
+            }
+        ),
+        ModelResponse.model_validate(
+            {
+                "finish_reason": "stop",
+                "message": {
+                    "role": "assistant",
+                    "content": "需求二运行",
+                },
+            }
+        ),
+        ModelResponse.model_validate(
+            {
+                "finish_reason": "stop",
+                "message": {
+                    "role": "assistant",
+                    "content": "需求一第二次运行",
+                },
+            }
+        ),
+    ]
+
+    app.dependency_overrides[
+        provide_llm_client
+    ] = lambda: FakeLLMClient(
+        scripted_responses=responses,
+    )
+
+    try:
+        first_response = client.post(
+            "/agent/runs",
+            json={
+                "message": "需求一第一次分析",
+                "requirement_id": first_requirement_id,
+            },
+        )
+        other_response = client.post(
+            "/agent/runs",
+            json={
+                "message": "需求二分析",
+                "requirement_id": second_requirement_id,
+            },
+        )
+        second_response = client.post(
+            "/agent/runs",
+            json={
+                "message": "需求一第二次分析",
+                "requirement_id": first_requirement_id,
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(
+            provide_llm_client,
+            None,
+        )
+
+    response = client.get(
+        "/agent/runs",
+        params={
+            "requirement_id": first_requirement_id,
+        },
+    )
+
+    assert response.status_code == 200
+
+    response_data = response.json()
+
+    assert [
+        item["run_id"]
+        for item in response_data
+    ] == [
+        second_response.json()["run_id"],
+        first_response.json()["run_id"],
+    ]
+
+    assert other_response.json()["run_id"] not in {
+        item["run_id"]
+        for item in response_data
+    }
