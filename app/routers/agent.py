@@ -86,6 +86,7 @@ def create_agent_run(
     run_repository.save(
         state=state,
         max_steps=request.max_steps,
+        requirement_id=request.requirement_id,
     )
 
     return AgentRunResponse.model_validate(state)

@@ -17,6 +17,7 @@ from app.routers.agent import (
 )
 from app.main import app
 from app.routers.agent import provide_llm_client
+from app.models import AgentRunRecord, Requirement
 
 test_engine = create_engine(
     "sqlite://",
@@ -457,3 +458,55 @@ def test_list_agent_runs_returns_empty_list() -> None:
 
     assert response.status_code == 200
     assert response.json() == []
+
+def test_create_agent_run_saves_requirement_id() -> None:
+    with TestingSessionLocal() as db:
+        requirement = Requirement(
+            title="用户登录",
+            content="用户可以登录系统",
+            priority=1,
+        )
+        db.add(requirement)
+        db.commit()
+        db.refresh(requirement)
+        requirement_id = requirement.id
+
+    final_response = ModelResponse.model_validate(
+        {
+            "finish_reason": "stop",
+            "message": {
+                "role": "assistant",
+                "content": "关联测试完成。",
+            },
+        }
+    )
+
+    app.dependency_overrides[
+        provide_llm_client
+    ] = lambda: FakeLLMClient(
+        scripted_responses=[final_response],
+    )
+
+    try:
+        response = client.post(
+            "/agent/runs",
+            json={
+                "message": "分析指定需求",
+                "requirement_id": requirement_id,
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(
+            provide_llm_client,
+            None,
+        )
+
+    assert response.status_code == 201
+
+    run_id = response.json()["run_id"]
+
+    with TestingSessionLocal() as db:
+        record = db.get(AgentRunRecord, run_id)
+
+        assert record is not None
+        assert record.requirement_id == requirement_id

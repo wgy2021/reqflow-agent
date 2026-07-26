@@ -17,9 +17,10 @@ class AgentRunRepository:
         self._db = db
 
     def save(
-        self,
-        state: AgentState,
-        max_steps: int,
+            self,
+            state: AgentState,
+            max_steps: int,
+            requirement_id: int | None = None,
     ) -> None:
         record = self._db.get(
             AgentRunRecord,
@@ -34,6 +35,7 @@ class AgentRunRepository:
         if record is None:
             record = AgentRunRecord(
                 run_id=state.run_id,
+                requirement_id=requirement_id,
                 status=state.status,
                 step_count=state.step_count,
                 max_steps=max_steps,

@@ -19,6 +19,10 @@ class AgentRunRequest(BaseModel):
     )
 
     message: str
+    requirement_id: int | None = Field(
+        default=None,
+        ge=1,
+    )
     max_steps: int = Field(
         default=5,
         ge=1,
