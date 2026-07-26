@@ -45,7 +45,11 @@ export function resolveAgentApproval(runId, approved) {
     },
   )
 }
-export function createAgentRun(message, maxSteps = 5) {
+export function createAgentRun(
+  message,
+  maxSteps = 5,
+  requirementId = null,
+) {
   return requestJson(AGENT_RUNS_API, {
     method: 'POST',
     headers: {
@@ -54,6 +58,7 @@ export function createAgentRun(message, maxSteps = 5) {
     body: JSON.stringify({
       message,
       max_steps: maxSteps,
+      requirement_id: requirementId,
     }),
   })
 }

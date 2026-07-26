@@ -221,6 +221,12 @@ class AgentRunRecord(Base):
         primary_key=True,
     )
 
+    requirement_id: Mapped[int | None] = mapped_column(
+        ForeignKey("requirements.id"),
+        nullable=True,
+        index=True,
+    )
+
     status: Mapped[str] = mapped_column(
         String(30),
         nullable=False,
