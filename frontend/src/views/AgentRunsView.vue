@@ -1,5 +1,6 @@
 <script setup>
 import { onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import MarkdownIt from 'markdown-it'
 
 import {
@@ -13,7 +14,7 @@ const markdown = new MarkdownIt({
   linkify: true,
   breaks: true,
 })
-
+const route = useRoute()
 const runs = ref([])
 const loading = ref(false)
 const errorMessage = ref('')
@@ -158,7 +159,10 @@ async function loadRuns() {
   errorMessage.value = ''
 
   try {
-    runs.value = await listAgentRuns()
+    const requirementId =
+       Number(route.query.requirement_id) || null
+
+    runs.value = await listAgentRuns(requirementId)
   } catch (error) {
     errorMessage.value =
       error instanceof Error

@@ -25,8 +25,12 @@ async function requestJson(url, options = {}) {
   return response.json()
 }
 
-export function listAgentRuns() {
-  return requestJson(AGENT_RUNS_API)
+export function listAgentRuns(requirementId = null) {
+  const url = requirementId === null
+    ? AGENT_RUNS_API
+    : `${AGENT_RUNS_API}?requirement_id=${encodeURIComponent(requirementId)}`
+
+  return requestJson(url)
 }
 
 export function resolveAgentApproval(runId, approved) {
