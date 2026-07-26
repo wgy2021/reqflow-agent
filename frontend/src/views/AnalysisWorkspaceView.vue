@@ -87,6 +87,14 @@ const pendingCount = computed(() => {
   return props.requirements.length - analyzedCount.value
 })
 
+function normalizePriority(priority) {
+  const numericPriority = Number(priority)
+
+  return [1, 2, 3].includes(numericPriority)
+    ? numericPriority
+    : null
+}
+
 function getPriorityLabel(priority) {
   const labels = {
     1: '高优先级',
@@ -94,17 +102,85 @@ function getPriorityLabel(priority) {
     3: '低优先级',
   }
 
-  return labels[priority] ?? '未设置'
+  return labels[normalizePriority(priority)] ?? '未设置'
+}
+
+function getPriorityShortLabel(priority) {
+  const labels = {
+    1: '高',
+    2: '中',
+    3: '低',
+  }
+
+  return labels[normalizePriority(priority)] ?? '未设置'
+}
+
+function getPriorityCode(priority) {
+  const normalizedPriority = normalizePriority(priority)
+
+  return normalizedPriority
+    ? `P${normalizedPriority}`
+    : '未设置'
 }
 
 function getPriorityType(priority) {
   const types = {
     1: 'danger',
     2: 'warning',
-    3: 'success',
+    3: 'info',
   }
 
-  return types[priority] ?? 'info'
+  return types[normalizePriority(priority)] ?? 'info'
+}
+
+function getPriorityLevelClass(priority) {
+  const normalizedPriority = normalizePriority(priority)
+
+  return normalizedPriority
+    ? `priority-p${normalizedPriority}`
+    : 'priority-unset'
+}
+
+function getPriorityDecision(
+  currentPriority,
+  suggestedPriority,
+) {
+  const current = normalizePriority(currentPriority)
+  const suggested = normalizePriority(suggestedPriority)
+
+  if (current === null || suggested === null) {
+    return {
+      label: '待评估',
+      className: 'decision-unknown',
+      description:
+        '当前或建议优先级信息不完整，请补充后重新分析。',
+    }
+  }
+
+  if (current === suggested) {
+    return {
+      label: '建议保持',
+      className: 'decision-keep',
+      description:
+        'Agent 建议保持当前优先级，可按现有排期继续推进。',
+    }
+  }
+
+  if (suggested < current) {
+    return {
+      label: '建议升级',
+      className: 'decision-upgrade',
+      description:
+        'Agent 建议提高优先级，请优先复核风险、影响范围和处理时限。',
+    }
+  }
+
+  return {
+    label: '建议降级',
+    className: 'decision-downgrade',
+    description:
+      'Agent 建议降低优先级，请结合业务价值和交付时限确认后再调整。',
+  }
 }
 
 function getToolLabel(toolName) {
@@ -212,72 +288,91 @@ function startAnalysis() {
             {{ selectedRequirement.title.slice(0, 1) }}
           </div>
 
-          <div>
-            <h4>{{ selectedRequirement.title }}</h4>
-            <span>
+          <div class="requirement-title-copy">
+            <div class="requirement-title-line">
+              <h4>{{ selectedRequirement.title }}</h4>
+
+              <span
+                class="priority-inline"
+                :class="
+                  getPriorityLevelClass(
+                    selectedRequirement.priority,
+                  )
+                "
+              >
+                <span class="priority-dot"></span>
+                <span>当前优先级</span>
+                <strong>
+                  {{
+                    getPriorityCode(
+                      selectedRequirement.priority,
+                    )
+                  }}
+                </strong>
+                <span>
+                  {{
+                    getPriorityShortLabel(
+                      selectedRequirement.priority,
+                    )
+                  }}
+                </span>
+              </span>
+            </div>
+
+            <span class="requirement-code">
               REQ-{{
                 String(selectedRequirement.id).padStart(4, '0')
               }}
             </span>
           </div>
-
-          <el-tag
-            :type="
-              getPriorityType(selectedRequirement.priority)
-            "
-            effect="light"
-            round
-          >
-            {{
-              getPriorityLabel(selectedRequirement.priority)
-            }}
-          </el-tag>
         </div>
 
         <div class="requirement-content">
           {{ selectedRequirement.content }}
         </div>
 
-        <div class="requirement-meta">
-          <span>
-            当前状态：
-            <strong
-              :class="{
-                analyzed: selectedAnalysis,
-              }"
+        <div class="requirement-footer">
+          <div class="requirement-meta">
+            <span class="meta-item">
+              <span class="meta-label">分析状态</span>
+              <strong
+                :class="{
+                  analyzed: selectedAnalysis,
+                }"
+              >
+                {{ selectedAnalysis ? '已分析' : '待分析' }}
+              </strong>
+            </span>
+
+            <span class="meta-item">
+              <span class="meta-label">缓存状态</span>
+              <strong>
+                {{ selectedAnalysis ? '已有结果' : '无缓存' }}
+              </strong>
+            </span>
+          </div>
+
+          <div class="requirement-actions">
+            <el-button
+              @click="emit('open-detail', selectedRequirement)"
             >
-              {{ selectedAnalysis ? '已分析' : '待分析' }}
-            </strong>
-          </span>
+              查看详情
+            </el-button>
 
-          <span>
-            缓存状态：
-            <strong>
-              {{ selectedAnalysis ? '已有结果' : '无缓存' }}
-            </strong>
-          </span>
-        </div>
-
-        <div class="requirement-actions">
-          <el-button
-            @click="emit('open-detail', selectedRequirement)"
-          >
-            查看详情
-          </el-button>
-
-          <el-button
-            type="primary"
-            :loading="isAnalyzing"
-            :disabled="!backendHealthy"
-            @click="startAnalysis"
-          >
-            <el-icon><MagicStick /></el-icon>
-            {{
-              selectedAnalysis
-                ? '重新执行 Agent 分析'
-                : '启动 Agent 分析'
-            }}
-          </el-button>
+            <el-button
+              type="primary"
+              :loading="isAnalyzing"
+              :disabled="!backendHealthy"
+              @click="startAnalysis"
+            >
+              <el-icon><MagicStick /></el-icon>
+              {{
+                selectedAnalysis
+                  ? '重新执行 Agent 分析'
+                  : '启动 Agent 分析'
+              }}
+            </el-button>
+          </div>
         </div>
       </div>
 
@@ -375,7 +470,7 @@ function startAnalysis() {
     >
       <section class="result-metrics">
         <article>
-          <span>整体结果</span>
+          <span>分析结论</span>
           <strong>
             {{
               selectedAnalysis.passed
@@ -385,11 +480,17 @@ function startAnalysis() {
           </strong>
         </article>
 
-        <article>
-          <span>建议优先级</span>
+        <article class="priority-change-metric">
+          <span>优先级变更</span>
           <strong>
             {{
-              getPriorityLabel(
+              getPriorityCode(
+                selectedRequirement.priority,
+              )
+            }}
+            <b>→</b>
+            {{
+              getPriorityCode(
                 selectedAnalysis.suggested_priority,
               )
             }}
@@ -397,20 +498,116 @@ function startAnalysis() {
         </article>
 
         <article>
-          <span>计划工具数</span>
+          <span>执行工具</span>
           <strong>
             {{
               selectedAnalysis.planned_tools?.length ?? 0
             }}
+            个
           </strong>
         </article>
 
         <article>
-          <span>发现问题数</span>
+          <span>发现问题</span>
           <strong>
             {{ selectedAnalysis.issues?.length ?? 0 }}
+            项
           </strong>
         </article>
+      </section>
+
+      <section class="priority-decision-card">
+        <header>
+          <div>
+            <span>优先级评估</span>
+            <strong>当前设置与 Agent 建议对比</strong>
+          </div>
+
+          <span
+            class="priority-decision-badge"
+            :class="
+              getPriorityDecision(
+                selectedRequirement.priority,
+                selectedAnalysis.suggested_priority,
+              ).className
+            "
+          >
+            {{
+              getPriorityDecision(
+                selectedRequirement.priority,
+                selectedAnalysis.suggested_priority,
+              ).label
+            }}
+          </span>
+        </header>
+
+        <div class="priority-flow">
+          <article
+            class="priority-node"
+            :class="
+              getPriorityLevelClass(
+                selectedRequirement.priority,
+              )
+            "
+          >
+            <span>当前优先级</span>
+            <strong>
+              {{
+                getPriorityCode(
+                  selectedRequirement.priority,
+                )
+              }}
+            </strong>
+            <small>
+              {{
+                getPriorityLabel(
+                  selectedRequirement.priority,
+                )
+              }}
+            </small>
+          </article>
+
+          <div
+            class="priority-arrow"
+            aria-hidden="true"
+          >
+            →
+          </div>
+
+          <article
+            class="priority-node"
+            :class="
+              getPriorityLevelClass(
+                selectedAnalysis.suggested_priority,
+              )
+            "
+          >
+            <span>Agent 建议</span>
+            <strong>
+              {{
+                getPriorityCode(
+                  selectedAnalysis.suggested_priority,
+                )
+              }}
+            </strong>
+            <small>
+              {{
+                getPriorityLabel(
+                  selectedAnalysis.suggested_priority,
+                )
+              }}
+            </small>
+          </article>
+        </div>
+
+        <p class="priority-decision-note">
+          {{
+            getPriorityDecision(
+              selectedRequirement.priority,
+              selectedAnalysis.suggested_priority,
+            ).description
+          }}
+        </p>
       </section>
 
       <section
@@ -601,7 +798,7 @@ function startAnalysis() {
 }
 
 .requirement-selector {
-  padding: 18px;
+  padding: 14px 18px;
   border-bottom: 1px solid #f2f3f5;
 }
 
@@ -610,12 +807,12 @@ function startAnalysis() {
 }
 
 .requirement-detail {
-  padding: 20px;
+  padding: 18px 20px;
 }
 
 .requirement-title {
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) auto;
+  grid-template-columns: 42px minmax(0, 1fr);
   align-items: center;
   gap: 12px;
 }
@@ -632,13 +829,26 @@ function startAnalysis() {
   font-weight: 600;
 }
 
-.requirement-title h4 {
-  margin: 0;
-  color: #1d2129;
-  font-size: 16px;
+.requirement-title-copy {
+  min-width: 0;
 }
 
-.requirement-title span {
+.requirement-title-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.requirement-title h4 {
+  min-width: 0;
+  margin: 0;
+  color: #1d2129;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.requirement-code {
   display: block;
   margin-top: 5px;
   color: #86909c;
@@ -646,30 +856,97 @@ function startAnalysis() {
   font-size: 10px;
 }
 
-.requirement-content {
-  min-height: 120px;
-  margin-top: 18px;
-  padding: 16px;
+.priority-inline {
+  min-height: 26px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
   border: 1px solid #e5e6eb;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #667085;
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.priority-inline strong {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.priority-dot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.priority-inline.priority-p1 {
+  border-color: #fecdca;
+  background: #fffafa;
+  color: #b42318;
+}
+
+.priority-inline.priority-p2 {
+  border-color: #fedf89;
+  background: #fffcf5;
+  color: #b54708;
+}
+
+.priority-inline.priority-p3 {
+  border-color: #d0d5dd;
+  background: #f9fafb;
+  color: #475467;
+}
+
+.requirement-content {
+  min-height: 72px;
+  margin-top: 14px;
+  padding: 14px 16px;
+  border: 1px solid #e5e6eb;
+  border-radius: 4px;
   background: #f7f8fa;
   color: #4e5969;
   font-size: 13px;
-  line-height: 1.8;
+  line-height: 1.75;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.requirement-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #f2f3f5;
 }
 
 .requirement-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 24px;
-  margin-top: 16px;
+  gap: 18px;
   color: #86909c;
   font-size: 11px;
 }
 
+.meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.meta-label {
+  color: #86909c;
+}
+
 .requirement-meta strong {
   color: #ff7d00;
+  font-weight: 600;
 }
 
 .requirement-meta strong.analyzed {
@@ -680,7 +957,7 @@ function startAnalysis() {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  margin-top: 20px;
+  flex-shrink: 0;
 }
 
 .pipeline-list {
@@ -773,6 +1050,148 @@ function startAnalysis() {
   margin-top: 7px;
   color: #1d2129;
   font-size: 16px;
+}
+
+.priority-change-metric strong {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.priority-change-metric b {
+  color: #86909c;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.priority-decision-card {
+  margin-top: 14px;
+  padding: 16px 18px;
+  border: 1px solid #e5e6eb;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.priority-decision-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.priority-decision-card header > div > span {
+  display: block;
+  color: #86909c;
+  font-size: 11px;
+}
+
+.priority-decision-card header > div > strong {
+  display: block;
+  margin-top: 5px;
+  color: #1d2129;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.priority-decision-badge {
+  flex-shrink: 0;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.decision-keep {
+  background: #e8ffea;
+  color: #00b42a;
+}
+
+.decision-upgrade {
+  background: #ffece8;
+  color: #d4380d;
+}
+
+.decision-downgrade {
+  background: #fff7e8;
+  color: #d46b08;
+}
+
+.decision-unknown {
+  background: #f2f3f5;
+  color: #4e5969;
+}
+
+.priority-flow {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr)
+    42px
+    minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.priority-node {
+  padding: 14px 16px;
+  border: 1px solid #e5e6eb;
+  border-radius: 5px;
+  background: #f7f8fa;
+}
+
+.priority-node > span {
+  display: block;
+  color: #86909c;
+  font-size: 11px;
+}
+
+.priority-node > strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 22px;
+  font-weight: 650;
+}
+
+.priority-node > small {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.priority-p1 {
+  border-color: #ffd5cc;
+  background: #fff3f0;
+  color: #c41d0c;
+}
+
+.priority-p2 {
+  border-color: #ffe3b3;
+  background: #fff8e8;
+  color: #ad6800;
+}
+
+.priority-p3 {
+  border-color: #d9e2ec;
+  background: #f4f7fa;
+  color: #475467;
+}
+
+.priority-unset {
+  color: #86909c;
+}
+
+.priority-arrow {
+  color: #86909c;
+  font-size: 22px;
+  text-align: center;
+}
+
+.priority-decision-note {
+  margin: 14px 0 0;
+  color: #4e5969;
+  font-size: 12px;
+  line-height: 1.7;
 }
 
 .result-section {
@@ -881,6 +1300,32 @@ function startAnalysis() {
 
   .result-metrics {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .priority-flow {
+    grid-template-columns: 1fr;
+  }
+
+  .priority-arrow {
+    transform: rotate(90deg);
+  }
+}
+
+@media (max-width: 760px) {
+  .requirement-title-line {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .requirement-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .requirement-actions {
+    width: 100%;
+    justify-content: flex-end;
   }
 }
 </style>
