@@ -16,7 +16,6 @@ from app.routers.agent import (
     provide_run_repository,
 )
 from app.main import app
-from app.routers.agent import provide_llm_client
 from app.models import AgentRunRecord, Requirement
 
 test_engine = create_engine(
@@ -442,13 +441,43 @@ def test_list_agent_runs_returns_saved_runs() -> None:
 
     response_data = response.json()
 
-    assert len(response_data) == 2
+    assert response_data["total"] == 2
+    assert response_data["limit"] == 20
+    assert response_data["offset"] == 0
+
+    items = response_data["items"]
+
+    assert len(items) == 2
     assert (
-        response_data[0]["run_id"]
+        items[0]["run_id"]
         == second_response.json()["run_id"]
     )
     assert (
-        response_data[1]["run_id"]
+        items[1]["run_id"]
+        == first_response.json()["run_id"]
+    )
+
+    paged_response = client.get(
+        "/agent/runs",
+        params={
+            "limit": 1,
+            "offset": 1,
+        },
+    )
+
+    assert paged_response.status_code == 200
+
+    paged_data = paged_response.json()
+
+    assert paged_data["total"] == 2
+    assert paged_data["limit"] == 1
+    assert paged_data["offset"] == 1
+
+    paged_items = paged_data["items"]
+
+    assert len(paged_items) == 1
+    assert (
+        paged_items[0]["run_id"]
         == first_response.json()["run_id"]
     )
 
@@ -457,7 +486,13 @@ def test_list_agent_runs_returns_empty_list() -> None:
     response = client.get("/agent/runs")
 
     assert response.status_code == 200
-    assert response.json() == []
+    assert response.json() == {
+        "items": [],
+        "total": 0,
+        "limit": 20,
+        "offset": 0,
+    }
+
 
 def test_create_agent_run_saves_requirement_id() -> None:
     with TestingSessionLocal() as db:
@@ -510,6 +545,7 @@ def test_create_agent_run_saves_requirement_id() -> None:
 
         assert record is not None
         assert record.requirement_id == requirement_id
+
 
 def test_list_agent_runs_filters_by_requirement_id() -> None:
     with TestingSessionLocal() as db:
@@ -612,9 +648,15 @@ def test_list_agent_runs_filters_by_requirement_id() -> None:
 
     response_data = response.json()
 
+    assert response_data["total"] == 2
+    assert response_data["limit"] == 20
+    assert response_data["offset"] == 0
+
+    items = response_data["items"]
+
     assert [
         item["run_id"]
-        for item in response_data
+        for item in items
     ] == [
         second_response.json()["run_id"],
         first_response.json()["run_id"],
@@ -622,5 +664,31 @@ def test_list_agent_runs_filters_by_requirement_id() -> None:
 
     assert other_response.json()["run_id"] not in {
         item["run_id"]
-        for item in response_data
+        for item in items
     }
+
+    paged_response = client.get(
+        "/agent/runs",
+        params={
+            "requirement_id": first_requirement_id,
+            "limit": 1,
+            "offset": 1,
+        },
+    )
+
+    assert paged_response.status_code == 200
+
+    paged_data = paged_response.json()
+
+    assert paged_data["total"] == 2
+    assert paged_data["limit"] == 1
+    assert paged_data["offset"] == 1
+
+    paged_items = paged_data["items"]
+
+    assert [
+        item["run_id"]
+        for item in paged_items
+    ] == [
+        first_response.json()["run_id"],
+    ]

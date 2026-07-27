@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.agent.api_schemas import (
     AgentApprovalRequest,
+    AgentRunPageResponse,
     AgentRunRequest,
     AgentRunResponse,
 )
@@ -44,29 +45,56 @@ def provide_run_repository(
 
 
 @router.get(
-    "/runs",
-    response_model=list[AgentRunResponse],
+    path="/runs",
+    response_model=AgentRunPageResponse,
 )
 def list_agent_runs(
-    requirement_id: int | None = Query(
-        default=None,
-        ge=1,
-    ),
-    run_repository: AgentRunRepository = Depends(
-        provide_run_repository
-    ),
-) -> list[AgentRunResponse]:
+        requirement_id: int | None = Query(
+            default=None,
+            ge=1,
+        ),
+        limit: int = Query(
+            default=20,
+            ge=1,
+            le=100,
+        ),
+        offset: int = Query(
+            default=0,
+            ge=0,
+        ),
+        run_repository: AgentRunRepository = Depends(
+            provide_run_repository
+        ),
+) -> AgentRunPageResponse:
     if requirement_id is None:
-        states = run_repository.list_all()
+        states = run_repository.list_all(
+            limit=limit,
+            offset=offset,
+        )
+        total = run_repository.count_all()
     else:
         states = run_repository.list_by_requirement_id(
-            requirement_id
+            requirement_id=requirement_id,
+            limit=limit,
+            offset=offset,
+        )
+        total = (
+            run_repository.count_by_requirement_id(
+                requirement_id
+            )
         )
 
-    return [
+    items = [
         AgentRunResponse.model_validate(state)
         for state in states
     ]
+
+    return AgentRunPageResponse(
+        items=items,
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.post(
