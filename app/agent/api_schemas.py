@@ -77,3 +77,9 @@ class AgentRunResponse(BaseModel):
 
     final_answer: str | None = None
     error: str | None = None
+
+class AgentRunPageResponse(BaseModel):
+    items: list[AgentRunResponse]
+    total: int = Field(ge=0)
+    limit: int = Field(ge=1)
+    offset: int = Field(ge=0)

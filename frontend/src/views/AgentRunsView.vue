@@ -35,6 +35,9 @@ async function showAllRuns() {
 }
 const runs = ref([])
 const currentRequirement = ref(null)
+const totalRuns = ref(0)
+const currentPage = ref(1)
+const pageSize = ref(20)
 const loading = ref(false)
 const errorMessage = ref('')
 
@@ -124,12 +127,8 @@ async function submitCreate() {
       currentRequirement.value?.id ?? null,
     )
 
-    runs.value = [
-      newRun,
-      ...runs.value.filter(
-        (run) => run.run_id !== newRun.run_id,
-      ),
-    ]
+    currentPage.value = 1
+    await loadRuns()
 
     createVisible.value = false
     openRunDetail(newRun)
@@ -189,8 +188,20 @@ async function loadRuns() {
         await getRequirement(requirementId)
     }
 
-    runs.value = await listAgentRuns(requirementId)
+    const offset =
+      (currentPage.value - 1) * pageSize.value
+
+    const result = await listAgentRuns(
+      requirementId,
+      pageSize.value,
+      offset,
+    )
+
+    runs.value = result.items
+    totalRuns.value = result.total
   } catch (error) {
+    runs.value = []
+    totalRuns.value = 0
     errorMessage.value =
       error instanceof Error
         ? error.message
@@ -200,9 +211,19 @@ async function loadRuns() {
   }
 }
 
+function handleCurrentChange() {
+  loadRuns()
+}
+
+function handleSizeChange() {
+  currentPage.value = 1
+  loadRuns()
+}
+
 watch(
   () => route.query.requirement_id,
   () => {
+    currentPage.value = 1
     loadRuns()
   },
   { immediate: true },
@@ -238,7 +259,7 @@ watch(
           </strong>
 
           <span class="run-count">
-            共 {{ runs.length }} 次运行
+            共 {{ totalRuns }} 次运行
           </span>
         </div>
 
@@ -379,6 +400,22 @@ watch(
           </template>
         </el-table-column>
       </el-table>
+
+      <div
+        v-if="!errorMessage && totalRuns > 0"
+        class="pagination-row"
+      >
+        <el-pagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="totalRuns"
+          layout="total, sizes, prev, pager, next, jumper"
+          background
+          @current-change="handleCurrentChange"
+          @size-change="handleSizeChange"
+        />
+      </div>
     </el-card>
 
     <el-dialog
@@ -692,6 +729,14 @@ h2 {
 .error-alert {
   width: calc(100% - 32px);
   margin: 16px;
+}
+
+.pagination-row {
+  display: flex;
+  justify-content: flex-end;
+  padding: 16px 20px;
+  border-top: 1px solid #e4e7ec;
+  background: #ffffff;
 }
 
 .empty-mark {

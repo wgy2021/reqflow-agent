@@ -1145,8 +1145,46 @@ onMounted(async () => {
 
         <div class="detail-actions">
           <el-button
+            type="primary"
+            class="detail-action detail-action--primary"
+            :loading="
+              analyzingRequirementId === selectedRequirement.id
+            "
+            @click="runAnalysis(selectedRequirement)"
+          >
+            <el-icon><MagicStick /></el-icon>
+            启动 Agent 分析
+          </el-button>
+
+          <el-button
+            class="detail-action detail-action--history"
+            @click="
+              openRequirementAgentHistory(selectedRequirement)
+            "
+          >
+            <el-icon><Clock /></el-icon>
+            运行历史
+          </el-button>
+
+          <el-button
+            class="detail-action detail-action--edit"
+            @click="openEditDialog(selectedRequirement)"
+          >
+            <el-icon><Edit /></el-icon>
+            编辑需求
+          </el-button>
+
+          <el-button
+            class="detail-action detail-action--close"
+            @click="detailDrawerVisible = false"
+          >
+            关闭
+          </el-button>
+
+          <el-button
             type="danger"
             plain
+            class="detail-action detail-action--delete"
             :loading="
               deletingRequirementId === selectedRequirement.id
             "
@@ -1155,39 +1193,6 @@ onMounted(async () => {
             <el-icon><Delete /></el-icon>
             删除需求
           </el-button>
-
-          <div class="detail-actions-right">
-            <el-button @click="detailDrawerVisible = false">
-              关闭
-            </el-button>
-
-            <el-button
-              @click="
-                openRequirementAgentHistory(selectedRequirement)
-              "
-            >
-              <el-icon><Clock /></el-icon>
-              运行历史
-            </el-button>
-
-            <el-button
-              @click="openEditDialog(selectedRequirement)"
-            >
-              <el-icon><Edit /></el-icon>
-              编辑需求
-            </el-button>
-
-            <el-button
-              type="primary"
-            :loading="
-              analyzingRequirementId === selectedRequirement.id
-            "
-            @click="runAnalysis(selectedRequirement)"
-          >
-              <el-icon><MagicStick /></el-icon>
-              启动 Agent 分析
-            </el-button>
-          </div>
         </div>
       </div>
     </el-drawer>
@@ -2124,10 +2129,8 @@ onMounted(async () => {
 
 .detail-drawer {
   display: flex;
-  min-height: calc(100vh - 110px);
   flex-direction: column;
 }
-
 .detail-heading {
   display: flex;
   align-items: center;
@@ -2193,18 +2196,42 @@ onMounted(async () => {
 }
 
 .detail-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-top: auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 24px;
   padding-top: 24px;
 }
 
-.detail-actions-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+.detail-action {
+  width: 100%;
+  min-width: 0;
+  margin-left: 0 !important;
+}
+
+.detail-action--primary {
+  grid-column: 1 / -1;
+  order: 1;
+}
+
+.detail-action--history {
+  order: 2;
+}
+
+.detail-action--edit {
+  order: 3;
+}
+
+.detail-action--close {
+  order: 4;
+}
+
+.detail-action--delete {
+  order: 5;
+}
+
+:deep(.el-drawer__body) {
+  overflow-x: hidden;
 }
 
 :deep(.el-drawer__title) {

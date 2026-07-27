@@ -25,12 +25,26 @@ async function requestJson(url, options = {}) {
   return response.json()
 }
 
-export function listAgentRuns(requirementId = null) {
-  const url = requirementId === null
-    ? AGENT_RUNS_API
-    : `${AGENT_RUNS_API}?requirement_id=${encodeURIComponent(requirementId)}`
+export function listAgentRuns(
+  requirementId = null,
+  limit = 20,
+  offset = 0,
+) {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+  })
 
-  return requestJson(url)
+  if (requirementId !== null) {
+    params.set(
+      'requirement_id',
+      String(requirementId),
+    )
+  }
+
+  return requestJson(
+    `${AGENT_RUNS_API}?${params.toString()}`,
+  )
 }
 
 export function resolveAgentApproval(runId, approved) {
@@ -49,6 +63,7 @@ export function resolveAgentApproval(runId, approved) {
     },
   )
 }
+
 export function createAgentRun(
   message,
   maxSteps = 5,

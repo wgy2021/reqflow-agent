@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.agent.state import AgentState
@@ -69,12 +69,18 @@ class AgentRunRepository:
             record.state_json
         )
 
-    def list_all(self) -> list[AgentState]:
+    def list_all(
+            self,
+            limit: int = 20,
+            offset: int = 0,
+    ) -> list[AgentState]:
         statement = (
             select(AgentRunRecord)
             .order_by(
                 AgentRunRecord.created_at.desc()
             )
+            .offset(offset)
+            .limit(limit)
         )
 
         records = self._db.scalars(
@@ -91,6 +97,8 @@ class AgentRunRepository:
     def list_by_requirement_id(
             self,
             requirement_id: int,
+            limit: int = 20,
+            offset: int = 0,
     ) -> list[AgentState]:
         statement = (
             select(AgentRunRecord)
@@ -100,6 +108,8 @@ class AgentRunRepository:
             .order_by(
                 AgentRunRecord.created_at.desc()
             )
+            .offset(offset)
+            .limit(limit)
         )
 
         records = self._db.scalars(
@@ -112,6 +122,33 @@ class AgentRunRepository:
             )
             for record in records
         ]
+
+    def count_all(self) -> int:
+        statement = (
+            select(func.count())
+            .select_from(AgentRunRecord)
+        )
+
+        total = self._db.scalar(statement)
+
+        return int(total or 0)
+
+    def count_by_requirement_id(
+            self,
+            requirement_id: int,
+    ) -> int:
+        statement = (
+            select(func.count())
+            .select_from(AgentRunRecord)
+            .where(
+                AgentRunRecord.requirement_id
+                == requirement_id
+            )
+        )
+
+        total = self._db.scalar(statement)
+
+        return int(total or 0)
 
     def get_max_steps(
         self,

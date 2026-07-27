@@ -163,6 +163,17 @@ def test_list_agent_runs_newest_first(
         second_state.run_id,
         first_state.run_id,
     ]
+    paged_states = repository.list_all(
+        limit=1,
+        offset=1,
+    )
+
+    assert [
+        state.run_id
+        for state in paged_states
+    ] == [
+        first_state.run_id,
+    ]
 
 def test_list_agent_runs_by_requirement_id(
     db: Session,
@@ -227,3 +238,32 @@ def test_list_agent_runs_by_requirement_id(
         second_state.run_id,
         first_state.run_id,
     ]
+
+    paged_states = repository.list_by_requirement_id(
+        requirement_id=first_requirement.id,
+        limit=1,
+        offset=1,
+    )
+
+    assert [
+        state.run_id
+        for state in paged_states
+    ] == [
+        first_state.run_id,
+    ]
+
+    assert repository.count_all() == 3
+
+    assert (
+        repository.count_by_requirement_id(
+            first_requirement.id
+        )
+        == 2
+    )
+
+    assert (
+        repository.count_by_requirement_id(
+            second_requirement.id
+        )
+        == 1
+    )
