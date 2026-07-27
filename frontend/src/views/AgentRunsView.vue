@@ -1,6 +1,12 @@
 <script setup>
-import { onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import {
+  ref,
+  watch,
+} from 'vue'
+import {
+  useRoute,
+  useRouter,
+} from 'vue-router'
 import MarkdownIt from 'markdown-it'
 
 import {
@@ -8,6 +14,7 @@ import {
   listAgentRuns,
   resolveAgentApproval,
 } from '../api/agentRuns'
+import { getRequirement } from '../api/requirements'
 
 const markdown = new MarkdownIt({
   html: false,
@@ -15,7 +22,19 @@ const markdown = new MarkdownIt({
   breaks: true,
 })
 const route = useRoute()
+const router = useRouter()
+
+function formatRequirementCode(requirementId) {
+  return `REQ-${String(requirementId).padStart(4, '0')}`
+}
+
+async function showAllRuns() {
+  await router.push({
+    name: 'agent-runs',
+  })
+}
 const runs = ref([])
+const currentRequirement = ref(null)
 const loading = ref(false)
 const errorMessage = ref('')
 
@@ -102,6 +121,7 @@ async function submitCreate() {
     const newRun = await createAgentRun(
       message,
       createForm.value.maxSteps,
+      currentRequirement.value?.id ?? null,
     )
 
     runs.value = [
@@ -160,7 +180,14 @@ async function loadRuns() {
 
   try {
     const requirementId =
-       Number(route.query.requirement_id) || null
+      Number(route.query.requirement_id) || null
+
+    if (requirementId === null) {
+      currentRequirement.value = null
+    } else {
+      currentRequirement.value =
+        await getRequirement(requirementId)
+    }
 
     runs.value = await listAgentRuns(requirementId)
   } catch (error) {
@@ -173,7 +200,13 @@ async function loadRuns() {
   }
 }
 
-onMounted(loadRuns)
+watch(
+  () => route.query.requirement_id,
+  () => {
+    loadRuns()
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -184,34 +217,67 @@ onMounted(loadRuns)
           AGENT RUNTIME
         </p>
 
-        <h2>运行记录</h2>
+        <h2>
+          {{
+            currentRequirement
+              ? '需求 Agent 运行历史'
+              : '运行记录'
+          }}
+        </h2>
 
-        <p class="description">
+        <div
+          v-if="currentRequirement"
+          class="requirement-context"
+        >
+          <span class="requirement-code">
+            {{ formatRequirementCode(currentRequirement.id) }}
+          </span>
+
+          <strong class="requirement-title">
+            {{ currentRequirement.title }}
+          </strong>
+
+          <span class="run-count">
+            共 {{ runs.length }} 次运行
+          </span>
+        </div>
+
+        <p
+          v-else
+          class="description"
+        >
           查看每次 Agent 执行的状态、工具调用和最终结果。
         </p>
       </div>
 
       <div class="heading-actions">
-  <el-button @click="openCreateDialog">
-        <el-icon>
-          <Plus />
-        </el-icon>
+        <el-button
+          v-if="currentRequirement"
+          @click="showAllRuns"
+        >
+          返回全部记录
+        </el-button>
 
-        新建运行
-      </el-button>
+        <el-button @click="openCreateDialog">
+          <el-icon>
+            <Plus />
+          </el-icon>
 
-      <el-button
-        type="primary"
-        :loading="loading"
-        @click="loadRuns"
-      >
-        <el-icon>
-          <Refresh />
-        </el-icon>
+          新建运行
+        </el-button>
 
-        刷新记录
-      </el-button>
-    </div>
+        <el-button
+          type="primary"
+          :loading="loading"
+          @click="loadRuns"
+        >
+          <el-icon>
+            <Refresh />
+          </el-icon>
+
+          刷新记录
+        </el-button>
+      </div>
     </div>
 
     <el-card
@@ -314,7 +380,8 @@ onMounted(loadRuns)
         </el-table-column>
       </el-table>
     </el-card>
-        <el-dialog
+
+    <el-dialog
       v-model="createVisible"
       title="新建 Agent 运行"
       width="560px"
@@ -381,6 +448,7 @@ onMounted(loadRuns)
         </el-button>
       </template>
     </el-dialog>
+
     <el-drawer
       v-model="detailVisible"
       title="Agent 运行详情"
@@ -571,6 +639,35 @@ h2 {
   margin: 10px 0 0;
   color: #667085;
   line-height: 1.7;
+}
+
+.requirement-context {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.requirement-code {
+  padding: 4px 8px;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  background: #f9fafb;
+  color: #475467;
+  font-family: Consolas, monospace;
+  font-size: 12px;
+}
+
+.requirement-title {
+  color: #344054;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.run-count {
+  color: #667085;
+  font-size: 13px;
 }
 
 .runs-card {

@@ -47,6 +47,15 @@ export function listRequirements({
   return requestJson(`${REQUIREMENTS_API}?${query.toString()}`)
 }
 
+export function getRequirement(requirementId) {
+  const encodedRequirementId =
+    encodeURIComponent(requirementId)
+
+  return requestJson(
+    `${REQUIREMENTS_API}/${encodedRequirementId}`,
+  )
+}
+
 export function createRequirement(payload) {
   return requestJson(REQUIREMENTS_API, {
     method: 'POST',
