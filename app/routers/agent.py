@@ -18,10 +18,14 @@ from app.agent.llm import (
     LLMClient,
     get_llm_client,
 )
+from app.agent.langgraph_runtime import (
+    run_langgraph_analysis,
+)
 from app.agent.registry import list_function_tools
 from app.agent.run_repository import AgentRunRepository
 from app.agent.runtime import AgentRuntime
 from app.database import get_db
+from app.models import Requirement
 
 
 router = APIRouter(
@@ -104,6 +108,7 @@ def list_agent_runs(
 )
 def create_agent_run(
     request: AgentRunRequest,
+    db: Session = Depends(get_db),
     llm_client: LLMClient = Depends(
         provide_llm_client
     ),
@@ -111,15 +116,34 @@ def create_agent_run(
         provide_run_repository
     ),
 ) -> AgentRunResponse:
-    runtime = AgentRuntime(
-        llm_client=llm_client,
-        max_steps=request.max_steps,
-    )
+    if request.requirement_id is not None:
+        requirement = db.get(
+            Requirement,
+            request.requirement_id,
+        )
 
-    state = runtime.run(
-        user_message=request.message,
-        tools=list_function_tools(),
-    )
+        if requirement is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Requirement not found",
+            )
+
+        state = run_langgraph_analysis(
+            llm_client=llm_client,
+            title=requirement.title,
+            content=requirement.content,
+            priority=requirement.priority,
+        )
+    else:
+        runtime = AgentRuntime(
+            llm_client=llm_client,
+            max_steps=request.max_steps,
+        )
+
+        state = runtime.run(
+            user_message=request.message,
+            tools=list_function_tools(),
+        )
 
     run_repository.save(
         state=state,

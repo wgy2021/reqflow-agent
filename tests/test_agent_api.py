@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.agent.run_repository import AgentRunRepository
-from app.database import Base
+from app.database import Base, get_db
 from app.routers.agent import (
     provide_llm_client,
     provide_run_repository,
@@ -40,9 +40,26 @@ def override_agent_run_repository():
     Base.metadata.drop_all(bind=test_engine)
     Base.metadata.create_all(bind=test_engine)
 
+    previous_get_db_override = (
+        app.dependency_overrides.get(get_db)
+    )
+    previous_repository_override = (
+        app.dependency_overrides.get(
+            provide_run_repository
+        )
+    )
+
+    def provide_test_db():
+        with TestingSessionLocal() as db:
+            yield db
+
     def provide_test_repository():
         with TestingSessionLocal() as db:
             yield AgentRunRepository(db)
+
+    app.dependency_overrides[
+        get_db
+    ] = provide_test_db
 
     app.dependency_overrides[
         provide_run_repository
@@ -50,10 +67,25 @@ def override_agent_run_repository():
 
     yield
 
-    app.dependency_overrides.pop(
-        provide_run_repository,
-        None,
-    )
+    if previous_get_db_override is None:
+        app.dependency_overrides.pop(
+            get_db,
+            None,
+        )
+    else:
+        app.dependency_overrides[
+            get_db
+        ] = previous_get_db_override
+
+    if previous_repository_override is None:
+        app.dependency_overrides.pop(
+            provide_run_repository,
+            None,
+        )
+    else:
+        app.dependency_overrides[
+            provide_run_repository
+        ] = previous_repository_override
 
 
 def test_create_agent_run_returns_completed_state() -> None:
@@ -692,3 +724,101 @@ def test_list_agent_runs_filters_by_requirement_id() -> None:
     ] == [
         first_response.json()["run_id"],
     ]
+
+def test_create_agent_run_with_requirement_uses_langgraph() -> None:
+    with TestingSessionLocal() as db:
+        requirement = Requirement(
+            title="用户登录安全需求",
+            content="系统应尽快完成安全登录检查",
+            priority=2,
+        )
+        db.add(requirement)
+        db.commit()
+        db.refresh(requirement)
+
+        requirement_id = requirement.id
+
+    app.dependency_overrides[
+        provide_llm_client
+    ] = lambda: FakeLLMClient()
+
+    try:
+        response = client.post(
+            "/agent/runs",
+            json={
+                "message": "分析指定需求",
+                "max_steps": 5,
+                "requirement_id": requirement_id,
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(
+            provide_llm_client,
+            None,
+        )
+
+    assert response.status_code == 201
+
+    response_data = response.json()
+
+    assert response_data["status"] == "completed"
+    assert response_data["step_count"] == 3
+
+    assert [
+        item["tool_name"]
+        for item in response_data["tool_results"]
+    ] == [
+        "completeness_check",
+        "ambiguity_check",
+        "priority_suggestion",
+    ]
+
+    assert response_data["final_answer"] is not None
+    assert (
+        "需求《用户登录安全需求》分析未通过"
+        in response_data["final_answer"]
+    )
+    assert (
+        "包含模糊表达：尽快"
+        in response_data["final_answer"]
+    )
+    assert (
+        "建议优先级为 1"
+        in response_data["final_answer"]
+    )
+
+    run_id = response_data["run_id"]
+
+    with TestingSessionLocal() as db:
+        record = db.get(
+            AgentRunRecord,
+            run_id,
+        )
+
+        assert record is not None
+        assert record.requirement_id == requirement_id
+
+
+def test_create_agent_run_with_missing_requirement_returns_404() -> None:
+    app.dependency_overrides[
+        provide_llm_client
+    ] = lambda: FakeLLMClient()
+
+    try:
+        response = client.post(
+            "/agent/runs",
+            json={
+                "message": "分析不存在的需求",
+                "requirement_id": 999999,
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(
+            provide_llm_client,
+            None,
+        )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Requirement not found",
+    }

@@ -5,6 +5,7 @@ from langgraph.graph import END, START, StateGraph
 
 from app.agent.llm.base import LLMClient
 from app.agent.registry import execute_tool, list_tools
+from app.agent.state import AgentState
 
 
 class LangGraphState(TypedDict):
@@ -102,6 +103,7 @@ def build_planner_graph(
                 + ["tool"]
             ),
         }
+
     def final_report_node(
         state: LangGraphState,
     ) -> dict[str, Any]:
@@ -256,3 +258,66 @@ def build_planner_graph(
     )
 
     return builder.compile()
+
+
+def run_langgraph_analysis(
+    *,
+    llm_client: LLMClient,
+    title: str,
+    content: str,
+    priority: int | None,
+) -> AgentState:
+    """运行 LangGraph，并转换为现有 AgentState。"""
+
+    graph = build_planner_graph(llm_client)
+
+    result = graph.invoke(
+        {
+            "title": title,
+            "content": content,
+            "priority": priority,
+            "planned_tools": [],
+            "tool_results": {},
+            "issues": [],
+            "passed": False,
+            "suggested_priority": None,
+            "priority_consistent": None,
+            "execution_order": [],
+            "final_report": "",
+        }
+    )
+
+    tool_results = [
+        {
+            "tool_name": tool_name,
+            "result": result["tool_results"][
+                tool_name
+            ],
+        }
+        for tool_name in result["planned_tools"]
+    ]
+
+    final_report = result["final_report"]
+
+    return AgentState(
+        status="completed",
+        step_count=len(
+            result["execution_order"]
+        ),
+        messages=[
+            {
+                "role": "user",
+                "content": (
+                    f"标题：{title}\n"
+                    f"内容：{content}\n"
+                    f"优先级：{priority}"
+                ),
+            },
+            {
+                "role": "assistant",
+                "content": final_report,
+            },
+        ],
+        tool_results=tool_results,
+        final_answer=final_report,
+    )

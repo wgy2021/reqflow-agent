@@ -1,5 +1,6 @@
 from app.agent.langgraph_runtime import (
     build_planner_graph,
+    run_langgraph_analysis,
 )
 from app.agent.llm import FakeLLMClient
 
@@ -74,3 +75,30 @@ def test_langgraph_plans_tools_with_fake_llm() -> None:
     assert result["tool_results"][
                "priority_suggestion"
            ]["suggested_priority"] == 1
+
+def test_run_langgraph_analysis_returns_agent_state() -> None:
+    state = run_langgraph_analysis(
+        llm_client=FakeLLMClient(),
+        title="用户登录安全需求",
+        content="系统应尽快完成安全登录检查",
+        priority=2,
+    )
+
+    assert state.status == "completed"
+    assert state.step_count == 3
+
+    assert [
+        item["tool_name"]
+        for item in state.tool_results
+    ] == [
+        "completeness_check",
+        "ambiguity_check",
+        "priority_suggestion",
+    ]
+
+    assert len(state.messages) == 2
+    assert state.final_answer is not None
+    assert "分析未通过" in state.final_answer
+    assert "包含模糊表达：尽快" in state.final_answer
+    assert "建议优先级为 1" in state.final_answer
+    assert state.error is None
