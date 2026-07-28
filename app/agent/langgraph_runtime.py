@@ -78,6 +78,17 @@ def build_planner_graph(
             ),
         }
 
+
+    def route_after_planner(
+        state: LangGraphState,
+    ) -> str:
+        """根据 Planner 结果决定下一节点。"""
+
+        if state["planned_tools"]:
+            return "tool"
+
+        return "final_report"
+
     def tool_node(
         state: LangGraphState,
     ) -> dict[str, Any]:
@@ -256,9 +267,13 @@ def build_planner_graph(
         START,
         "planner",
     )
-    builder.add_edge(
+    builder.add_conditional_edges(
         "planner",
-        "tool",
+        route_after_planner,
+        {
+            "tool": "tool",
+            "final_report": "final_report",
+        },
     )
     builder.add_edge(
         "tool",

@@ -129,3 +129,59 @@ def test_run_langgraph_analysis_returns_agent_state() -> None:
             "content": "系统应尽快完成安全登录检查",
         },
     ]
+
+class NoToolLLMClient(FakeLLMClient):
+    """模拟 Planner 不选择任何工具。"""
+
+    def plan_tools(
+        self,
+        title: str,
+        content: str,
+        priority: int | None,
+        available_tools: list[dict[str, str]],
+    ) -> list[str]:
+        return []
+
+
+def test_langgraph_skips_tool_node_when_no_tools() -> None:
+    graph = build_planner_graph(
+        NoToolLLMClient()
+    )
+
+    result = graph.invoke(
+        {
+            "title": "普通需求",
+            "content": "展示欢迎页面",
+            "priority": 3,
+            "planned_tools": [],
+            "tool_results": {},
+            "execution_order": [],
+            "final_report": "",
+            "issues": [],
+            "passed": False,
+            "suggested_priority": None,
+            "priority_consistent": None,
+        }
+    )
+
+    assert result["planned_tools"] == []
+    assert result["tool_results"] == {}
+
+    assert result["execution_order"] == [
+        "planner",
+        "final_report",
+    ]
+
+    assert result["issues"] == [
+        "Planner 未选择任何分析工具",
+    ]
+
+    assert result["passed"] is False
+
+    assert result["final_report"] == (
+        "需求《普通需求》分析未通过。"
+        "当前优先级：3。"
+        "已执行工具：无。"
+        "分析结论："
+        "Planner 未选择任何分析工具。"
+    )
