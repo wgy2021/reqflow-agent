@@ -108,16 +108,26 @@ def build_planner_graph(
         for tool_name in state["planned_tools"]:
             arguments = tool_arguments.get(tool_name)
 
-            if arguments is None:
-                raise ValueError(
-                    "No arguments configured for tool: "
-                    f"{tool_name}"
-                )
+            try:
+                if arguments is None:
+                    raise ValueError(
+                        "No arguments configured for tool: "
+                        f"{tool_name}"
+                    )
 
-            tool_results[tool_name] = execute_tool(
-                tool_name,
-                **arguments,
-            )
+                tool_results[tool_name] = execute_tool(
+                    tool_name,
+                    **arguments,
+                )
+            except Exception as exc:
+                tool_results[tool_name] = {
+                    "tool": tool_name,
+                    "passed": False,
+                    "error": (
+                        f"{exc.__class__.__name__}: "
+                        f"{exc}"
+                    ),
+                }
 
         return {
             "tool_results": tool_results,
@@ -133,6 +143,20 @@ def build_planner_graph(
         """汇总工具结果并生成最终报告。"""
 
         issues: list[str] = []
+        failed_tools = {
+            tool_name: result["error"]
+            for tool_name, result
+            in state["tool_results"].items()
+            if "error" in result
+        }
+
+        for tool_name, error_message in (
+            failed_tools.items()
+        ):
+            issues.append(
+                f"工具 {tool_name} 执行失败："
+                f"{error_message}"
+            )
 
         completeness_result = (
             state["tool_results"].get(
@@ -141,8 +165,9 @@ def build_planner_graph(
         )
 
         if (
-            completeness_result is not None
-            and not completeness_result["passed"]
+                completeness_result is not None
+                and "error" not in completeness_result
+                and not completeness_result["passed"]
         ):
             missing_fields = ", ".join(
                 completeness_result[
@@ -160,8 +185,9 @@ def build_planner_graph(
         )
 
         if (
-            ambiguity_result is not None
-            and not ambiguity_result["passed"]
+                ambiguity_result is not None
+                and "error" not in ambiguity_result
+                and not ambiguity_result["passed"]
         ):
             matched_terms = "、".join(
                 ambiguity_result[
@@ -181,7 +207,10 @@ def build_planner_graph(
         suggested_priority: int | None = None
         priority_consistent: bool | None = None
 
-        if priority_result is not None:
+        if (
+                priority_result is not None
+                and "error" not in priority_result
+        ):
             suggested_priority = priority_result[
                 "suggested_priority"
             ]
@@ -201,6 +230,8 @@ def build_planner_graph(
                     )
 
         passed = bool(state["planned_tools"])
+        if failed_tools:
+            passed = False
 
         if not state["planned_tools"]:
             issues.append(
@@ -208,14 +239,16 @@ def build_planner_graph(
             )
 
         if (
-            completeness_result is not None
-            and not completeness_result["passed"]
+                completeness_result is not None
+                and "error" not in completeness_result
+                and not completeness_result["passed"]
         ):
             passed = False
 
         if (
-            ambiguity_result is not None
-            and not ambiguity_result["passed"]
+                ambiguity_result is not None
+                and "error" not in ambiguity_result
+                and not ambiguity_result["passed"]
         ):
             passed = False
 
@@ -327,9 +360,9 @@ def run_langgraph_analysis(
             "function": {
                 "name": tool_name,
                 "arguments": json.dumps(
-                    tool_arguments[tool_name],
-                    ensure_ascii=False,
-                ),
+                tool_arguments.get(tool_name, {}),
+                ensure_ascii=False,
+            ),
             },
         }
         for index, tool_name in enumerate(
