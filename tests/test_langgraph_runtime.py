@@ -185,3 +185,52 @@ def test_langgraph_skips_tool_node_when_no_tools() -> None:
         "分析结论："
         "Planner 未选择任何分析工具。"
     )
+
+class UnknownToolLLMClient(FakeLLMClient):
+    """模拟 Planner 选择未配置的工具。"""
+
+    def plan_tools(
+        self,
+        title: str,
+        content: str,
+        priority: int | None,
+        available_tools: list[dict[str, str]],
+    ) -> list[str]:
+        return ["unknown_tool"]
+
+
+def test_langgraph_records_tool_error() -> None:
+    state = run_langgraph_analysis(
+        llm_client=UnknownToolLLMClient(),
+        title="异常工具测试",
+        content="验证工具失败时仍能生成运行记录",
+        priority=2,
+    )
+
+    assert state.status == "completed"
+    assert state.step_count == 3
+
+    assert len(state.tool_calls) == 1
+    assert (
+        state.tool_calls[0].function.name
+        == "unknown_tool"
+    )
+    assert json.loads(
+        state.tool_calls[0].function.arguments
+    ) == {}
+
+    assert len(state.tool_results) == 1
+
+    result = state.tool_results[0]["result"]
+
+    assert result["tool"] == "unknown_tool"
+    assert result["passed"] is False
+    assert result["error"] == (
+        "ValueError: No arguments configured "
+        "for tool: unknown_tool"
+    )
+
+    assert (
+        "工具 unknown_tool 执行失败"
+        in state.final_answer
+    )
