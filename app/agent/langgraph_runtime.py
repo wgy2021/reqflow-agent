@@ -1,5 +1,5 @@
 from typing import Any, TypedDict
-
+import json
 import app.agent.tools  # 触发三个分析工具注册
 from langgraph.graph import END, START, StateGraph
 
@@ -25,6 +25,30 @@ class LangGraphState(TypedDict):
 
     execution_order: list[str]
     final_report: str
+
+
+def _build_tool_arguments(
+    *,
+    title: str,
+    content: str,
+    priority: int | None,
+) -> dict[str, dict[str, Any]]:
+    """构造各分析工具需要的参数。"""
+
+    return {
+        "completeness_check": {
+            "title": title,
+            "content": content,
+            "priority": priority,
+        },
+        "ambiguity_check": {
+            "content": content,
+        },
+        "priority_suggestion": {
+            "title": title,
+            "content": content,
+        },
+    }
 
 
 def build_planner_graph(
@@ -59,23 +83,11 @@ def build_planner_graph(
     ) -> dict[str, Any]:
         """执行 Planner 选择的分析工具。"""
 
-        tool_arguments: dict[
-            str,
-            dict[str, Any],
-        ] = {
-            "completeness_check": {
-                "title": state["title"],
-                "content": state["content"],
-                "priority": state["priority"],
-            },
-            "ambiguity_check": {
-                "content": state["content"],
-            },
-            "priority_suggestion": {
-                "title": state["title"],
-                "content": state["content"],
-            },
-        }
+        tool_arguments = _build_tool_arguments(
+            title=state["title"],
+            content=state["content"],
+            priority=state["priority"],
+        )
 
         tool_results: dict[
             str,
@@ -287,6 +299,30 @@ def run_langgraph_analysis(
         }
     )
 
+    tool_arguments = _build_tool_arguments(
+        title=title,
+        content=content,
+        priority=priority,
+    )
+
+    tool_calls = [
+        {
+            "id": f"langgraph-call-{index}",
+            "type": "function",
+            "function": {
+                "name": tool_name,
+                "arguments": json.dumps(
+                    tool_arguments[tool_name],
+                    ensure_ascii=False,
+                ),
+            },
+        }
+        for index, tool_name in enumerate(
+            result["planned_tools"],
+            start=1,
+        )
+    ]
+
     tool_results = [
         {
             "tool_name": tool_name,
@@ -318,6 +354,7 @@ def run_langgraph_analysis(
                 "content": final_report,
             },
         ],
+        tool_calls=tool_calls,
         tool_results=tool_results,
         final_answer=final_report,
     )
