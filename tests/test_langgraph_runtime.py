@@ -1,3 +1,4 @@
+import json
 from app.agent.langgraph_runtime import (
     build_planner_graph,
     run_langgraph_analysis,
@@ -102,3 +103,29 @@ def test_run_langgraph_analysis_returns_agent_state() -> None:
     assert "包含模糊表达：尽快" in state.final_answer
     assert "建议优先级为 1" in state.final_answer
     assert state.error is None
+    assert [
+        call.function.name
+        for call in state.tool_calls
+    ] == [
+        "completeness_check",
+        "ambiguity_check",
+        "priority_suggestion",
+    ]
+
+    assert [
+        json.loads(call.function.arguments)
+        for call in state.tool_calls
+    ] == [
+        {
+            "title": "用户登录安全需求",
+            "content": "系统应尽快完成安全登录检查",
+            "priority": 2,
+        },
+        {
+            "content": "系统应尽快完成安全登录检查",
+        },
+        {
+            "title": "用户登录安全需求",
+            "content": "系统应尽快完成安全登录检查",
+        },
+    ]
