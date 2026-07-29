@@ -360,9 +360,9 @@ def run_langgraph_analysis(
             "function": {
                 "name": tool_name,
                 "arguments": json.dumps(
-                tool_arguments.get(tool_name, {}),
-                ensure_ascii=False,
-            ),
+                    tool_arguments.get(tool_name, {}),
+                    ensure_ascii=False,
+                ),
             },
         }
         for index, tool_name in enumerate(
@@ -383,8 +383,27 @@ def run_langgraph_analysis(
 
     final_report = result["final_report"]
 
+    failed_tool_errors = [
+        f"{tool_name}: {tool_result['error']}"
+        for tool_name, tool_result
+        in result["tool_results"].items()
+        if "error" in tool_result
+    ]
+
+    run_status = (
+        "failed"
+        if failed_tool_errors
+        else "completed"
+    )
+
+    run_error = (
+        "；".join(failed_tool_errors)
+        if failed_tool_errors
+        else None
+    )
+
     return AgentState(
-        status="completed",
+        status=run_status,
         step_count=len(
             result["execution_order"]
         ),
@@ -405,4 +424,5 @@ def run_langgraph_analysis(
         tool_calls=tool_calls,
         tool_results=tool_results,
         final_answer=final_report,
+        error=run_error,
     )

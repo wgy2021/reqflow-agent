@@ -1,4 +1,5 @@
 import json
+
 from app.agent.langgraph_runtime import (
     build_planner_graph,
     run_langgraph_analysis,
@@ -60,22 +61,23 @@ def test_langgraph_plans_tools_with_fake_llm() -> None:
     )
 
     assert result["tool_results"][
-               "completeness_check"
-           ] == {
-               "tool": "completeness_check",
-               "passed": True,
-               "missing_fields": [],
-           }
+        "completeness_check"
+    ] == {
+        "tool": "completeness_check",
+        "passed": True,
+        "missing_fields": [],
+    }
 
     assert result["tool_results"][
-               "ambiguity_check"
-           ]["matched_terms"] == [
-               "尽快",
-           ]
+        "ambiguity_check"
+    ]["matched_terms"] == [
+        "尽快",
+    ]
 
     assert result["tool_results"][
-               "priority_suggestion"
-           ]["suggested_priority"] == 1
+        "priority_suggestion"
+    ]["suggested_priority"] == 1
+
 
 def test_run_langgraph_analysis_returns_agent_state() -> None:
     state = run_langgraph_analysis(
@@ -86,6 +88,7 @@ def test_run_langgraph_analysis_returns_agent_state() -> None:
     )
 
     assert state.status == "completed"
+    assert state.error is None
     assert state.step_count == 3
 
     assert [
@@ -102,7 +105,7 @@ def test_run_langgraph_analysis_returns_agent_state() -> None:
     assert "分析未通过" in state.final_answer
     assert "包含模糊表达：尽快" in state.final_answer
     assert "建议优先级为 1" in state.final_answer
-    assert state.error is None
+
     assert [
         call.function.name
         for call in state.tool_calls
@@ -129,6 +132,7 @@ def test_run_langgraph_analysis_returns_agent_state() -> None:
             "content": "系统应尽快完成安全登录检查",
         },
     ]
+
 
 class NoToolLLMClient(FakeLLMClient):
     """模拟 Planner 不选择任何工具。"""
@@ -186,6 +190,7 @@ def test_langgraph_skips_tool_node_when_no_tools() -> None:
         "Planner 未选择任何分析工具。"
     )
 
+
 class UnknownToolLLMClient(FakeLLMClient):
     """模拟 Planner 选择未配置的工具。"""
 
@@ -207,7 +212,12 @@ def test_langgraph_records_tool_error() -> None:
         priority=2,
     )
 
-    assert state.status == "completed"
+    assert state.status == "failed"
+    assert state.error == (
+        "unknown_tool: "
+        "ValueError: No arguments configured "
+        "for tool: unknown_tool"
+    )
     assert state.step_count == 3
 
     assert len(state.tool_calls) == 1
