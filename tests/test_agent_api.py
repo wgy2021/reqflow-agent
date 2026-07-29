@@ -822,3 +822,72 @@ def test_create_agent_run_with_missing_requirement_returns_404() -> None:
     assert response.json() == {
         "detail": "Requirement not found",
     }
+
+class UnknownToolLLMClient(FakeLLMClient):
+    """模拟 Planner 选择未配置的工具。"""
+
+    def plan_tools(
+        self,
+        title: str,
+        content: str,
+        priority: int | None,
+        available_tools: list[dict[str, str]],
+    ) -> list[str]:
+        return ["unknown_tool"]
+
+
+def test_failed_langgraph_run_is_persisted() -> None:
+    with TestingSessionLocal() as db:
+        requirement = Requirement(
+            title="异常工具需求",
+            content="验证工具执行失败状态",
+            priority=2,
+        )
+        db.add(requirement)
+        db.commit()
+        db.refresh(requirement)
+
+        requirement_id = requirement.id
+
+    app.dependency_overrides[
+        provide_llm_client
+    ] = lambda: UnknownToolLLMClient()
+
+    try:
+        response = client.post(
+            "/agent/runs",
+            json={
+                "message": "分析异常工具需求",
+                "max_steps": 5,
+                "requirement_id": requirement_id,
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(
+            provide_llm_client,
+            None,
+        )
+
+    assert response.status_code == 201
+
+    response_data = response.json()
+    expected_error = (
+        "unknown_tool: "
+        "ValueError: No arguments configured "
+        "for tool: unknown_tool"
+    )
+
+    assert response_data["status"] == "failed"
+    assert response_data["error"] == expected_error
+
+    with TestingSessionLocal() as db:
+        record = db.get(
+            AgentRunRecord,
+            response_data["run_id"],
+        )
+
+        assert record is not None
+        assert record.requirement_id == requirement_id
+        assert record.status == "failed"
+        assert record.state_json["status"] == "failed"
+        assert record.state_json["error"] == expected_error
