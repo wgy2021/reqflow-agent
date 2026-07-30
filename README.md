@@ -2,16 +2,17 @@
 
 [![Tests](https://github.com/wgy2021/reqflow-agent/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/wgy2021/reqflow-agent/actions/workflows/tests.yml)
 
-ReqFlow Agent 是一个面向软件需求管理与智能分析场景的全栈 Agent 项目。项目以 FastAPI 为后端、Vue 3 为前端，集成 LangGraph 工作流、LLM 工具规划、RAG 知识库、分析历史、缓存、异常降级、自动化测试和容器化部署。
+ReqFlow Agent 是一个面向软件需求管理与智能分析场景的全栈 Agent 项目。项目以 FastAPI 为后端、Vue 3 为前端，集成 LangGraph 工作流、LLM 工具规划、RAG 知识库、Agent Evaluation、分析历史、缓存、异常降级、自动化测试和容器化部署。
 
 ## 项目简介
 
-系统围绕四条主线展开：
+系统围绕五条主线展开：
 
 1. **需求管理**：完成软件需求的创建、查询、修改、删除、分页和优先级筛选。
 2. **Agent 智能分析**：由 LLM Planner 决定需要调用的分析工具，通过 LangGraph 编排工具执行与最终报告生成。
 3. **Agent 运行记录**：保存每次运行的共享状态、工具调用轨迹、执行结果、最终报告和错误信息。
 4. **RAG 知识库**：管理知识文档，自动完成文本分块、向量生成和语义检索，并将检索结果作为需求分析上下文。
+5. **Agent Evaluation**：使用人工标注 JSONL 数据集评估 Planner 工具选择，统计 Exact Match、Precision、Recall、失败案例和 LLM 降级次数。
 
 项目提供 Vue 3 可视化管理界面，并使用 FastAPI、SQLAlchemy、Alembic、pytest、Docker 和 GitHub Actions 完成后端服务、数据库版本管理、自动测试和持续集成。
 
@@ -80,6 +81,18 @@ ReqFlow Agent 是一个面向软件需求管理与智能分析场景的全栈 Ag
 - 需求分析前自动检索相关知识片段
 - 分析结果持久化保存知识引用、文档来源和相关度
 
+### Agent Evaluation
+
+- 使用 JSONL 保存人工标注的需求评测案例
+- 评测时执行真实的 `execute_langgraph_analysis()` 链路
+- 对比预期工具与 Planner 实际选择工具
+- 统计 Exact Match、Precision、Recall、漏选工具和误选工具
+- 聚合总案例数、失败案例 ID 和 LLM 降级次数
+- 自动生成 JSON 与 Markdown 两种评测报告
+- 当前提供 10 条 FakeLLM 确定性基线案例
+
+> 当前 100% 结果仅表示 FakeLLM 在这 10 条规则型基线案例上的表现，不代表真实模型或生产环境准确率。
+
 ### 前端页面
 
 - 工作台
@@ -97,7 +110,7 @@ ReqFlow Agent 是一个面向软件需求管理与智能分析场景的全栈 Ag
 
 - 使用 Alembic 管理数据库结构版本
 - 使用 pytest 编写单元测试、接口测试和数据库持久化测试
-- 当前共 **140 个自动化测试**
+- 当前共 **152 个自动化测试**
 - 使用 Docker 构建后端镜像
 - 使用 Docker Compose 启动后端服务
 - 使用 Docker Volume 持久化 SQLite 数据
@@ -128,6 +141,9 @@ ReqFlow Agent 是一个面向软件需求管理与智能分析场景的全栈 Ag
 - SHA-256 内容指纹
 - 文本分块
 - 余弦相似度检索
+- JSONL 人工标注评测数据集
+- Exact Match / Precision / Recall
+- JSON / Markdown 评测报告
 
 ### 前端
 
@@ -289,6 +305,8 @@ reqflow-agent/
 │   │   ├── tools/
 │   │   ├── analyzer.py
 │   │   ├── embeddings.py
+│   │   ├── evaluation.py
+│   │   ├── evaluation_report.py
 │   │   ├── langgraph_runtime.py
 │   │   ├── registry.py
 │   │   ├── run_repository.py
@@ -312,7 +330,9 @@ reqflow-agent/
 │       ├── views/
 │       ├── App.vue
 │       └── main.js
+├── evals/
 ├── migrations/
+├── reports/
 ├── scripts/
 ├── tests/
 │   ├── test_agent_api.py
@@ -335,6 +355,8 @@ reqflow-agent/
 - `app/routers`：接收 HTTP 请求、校验参数并组织业务流程。
 - `app/routers/agent.py`：调用 LangGraph、运行仓库并返回 Agent 运行响应。
 - `app/agent/langgraph_runtime.py`：构建和执行 LangGraph 工作流。
+- `app/agent/evaluation.py`：定义单案例和批量工具选择评测指标。
+- `app/agent/evaluation_report.py`：读取 JSONL 数据集并生成 JSON、Markdown 报告。
 - `app/agent/run_repository.py`：将 `AgentState` 持久化为 `AgentRunRecord`。
 - `app/agent/registry.py`：注册并管理 Agent 工具。
 - `app/agent/tools`：实现完整性、歧义和优先级分析工具。
@@ -343,7 +365,9 @@ reqflow-agent/
 - `frontend/src/api`：封装前端对后端 API 的调用。
 - `frontend/src/views`：实现各业务页面。
 - `migrations`：保存 Alembic 配置和数据库迁移脚本。
-- `tests`：保存单元测试、接口测试和持久化测试。
+- `evals`：保存人工标注的 Agent Evaluation 数据集。
+- `reports`：保存可展示的评测结果。
+- `tests`：保存单元测试、接口测试、持久化测试和评测测试。
 - `.github/workflows/tests.yml`：定义持续集成流程。
 
 ## 环境要求
@@ -528,7 +552,7 @@ python -m pytest -q
 当前结果：
 
 ```text
-140 passed, 1 warning
+152 passed, 1 warning
 ```
 
 测试覆盖：
@@ -539,6 +563,8 @@ python -m pytest -q
 - FakeLLM、LLM Factory 和 OpenAI-Compatible Client
 - LLM 异常自动降级
 - LangGraph Planner、Tool 和 Final Report 节点
+- Agent 工具选择 Exact Match、Precision、Recall
+- JSONL 评测数据读取、批量汇总和报告生成
 - LangGraph 有工具和无工具的条件路由
 - 工具调用轨迹 `tool_calls`
 - 工具异常捕获和失败状态
@@ -548,6 +574,48 @@ python -m pytest -q
 - 分析历史、缓存、向量检索和 RAG 知识引用
 
 测试环境自动使用 FakeLLM，不会调用真实模型，也不会产生 API 费用。
+
+## Agent Evaluation
+
+默认评测使用 FakeLLM，结果稳定、可重复，不调用真实模型接口。
+
+运行 10 条人工标注基线案例：
+
+```powershell
+cd D:\projects\reqflow-agent
+python scripts/run_agent_eval.py
+```
+
+当前 FakeLLM 基线结果：
+
+```text
+Total cases: 10
+Exact match rate: 100.00%
+Average precision: 100.00%
+Average recall: 100.00%
+LLM fallback count: 0
+Failed case IDs: none
+```
+
+运行后自动生成：
+
+```text
+reports/agent_eval_report.json
+reports/agent_eval_report.md
+```
+
+评测链路：
+
+```text
+JSONL 人工标注案例
+→ execute_langgraph_analysis()
+→ 获取 Planner 实际选择的工具
+→ 对比预期工具
+→ 计算 Exact Match / Precision / Recall
+→ 输出失败案例和评测报告
+```
+
+当前结果是 FakeLLM 的规则基线，用于验证评测框架和回归能力，不代表真实 DeepSeek Planner 或生产环境的准确率。
 
 ## 前端构建
 
@@ -590,6 +658,7 @@ npm run build
 - 工具失败时捕获异常、生成失败报告并保存运行记录。
 - 将完整 Agent 状态持久化到 `state_json`，同时使用独立 `status` 字段支持快速查询。
 - 使用 FakeLLM 保证测试稳定、可重复且不产生真实 API 费用。
+- 使用人工标注 JSONL 数据集量化评估 Planner 的工具选择，并输出可回归的失败案例。
 - 使用真实 LLM 异常降级机制提高系统可用性。
 - 使用 SHA-256 内容指纹减少重复模型调用和 Token 消耗。
 - 实现知识文档增删改查、分块、向量生成、语义检索和索引重建闭环。
@@ -618,6 +687,7 @@ npm run build
 - Alembic 数据库迁移
 - Docker 后端部署
 - GitHub Actions 完整 CI
-- 140 个自动化测试
+- Agent Evaluation 数据集、聚合指标与报告生成
+- 152 个自动化测试
 
 项目当前可作为 LLM Agent、LangGraph、RAG、FastAPI 后端和全栈工程化方向的实习项目进行展示。
