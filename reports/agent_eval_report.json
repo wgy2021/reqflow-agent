@@ -1,0 +1,231 @@
+{
+  "total_cases": 10,
+  "exact_match_count": 10,
+  "exact_match_rate": 1.0,
+  "average_precision": 1.0,
+  "average_recall": 1.0,
+  "fallback_count": 0,
+  "failed_case_ids": [],
+  "results": [
+    {
+      "case_id": "plain-copy-001",
+      "tool_selection": {
+        "expected_tools": [
+          "completeness_check"
+        ],
+        "actual_tools": [
+          "completeness_check"
+        ],
+        "exact_match": true,
+        "precision": 1.0,
+        "recall": 1.0,
+        "missed_tools": [],
+        "false_positive_tools": []
+      },
+      "actual_status": "completed",
+      "actual_passed": true,
+      "llm_fallback_used": false,
+      "llm_error": null
+    },
+    {
+      "case_id": "ambiguity-speed-001",
+      "tool_selection": {
+        "expected_tools": [
+          "completeness_check",
+          "ambiguity_check"
+        ],
+        "actual_tools": [
+          "completeness_check",
+          "ambiguity_check"
+        ],
+        "exact_match": true,
+        "precision": 1.0,
+        "recall": 1.0,
+        "missed_tools": [],
+        "false_positive_tools": []
+      },
+      "actual_status": "completed",
+      "actual_passed": false,
+      "llm_fallback_used": false,
+      "llm_error": null
+    },
+    {
+      "case_id": "security-login-001",
+      "tool_selection": {
+        "expected_tools": [
+          "completeness_check",
+          "priority_suggestion"
+        ],
+        "actual_tools": [
+          "completeness_check",
+          "priority_suggestion"
+        ],
+        "exact_match": true,
+        "precision": 1.0,
+        "recall": 1.0,
+        "missed_tools": [],
+        "false_positive_tools": []
+      },
+      "actual_status": "completed",
+      "actual_passed": true,
+      "llm_fallback_used": false,
+      "llm_error": null
+    },
+    {
+      "case_id": "performance-api-001",
+      "tool_selection": {
+        "expected_tools": [
+          "completeness_check",
+          "priority_suggestion"
+        ],
+        "actual_tools": [
+          "completeness_check",
+          "priority_suggestion"
+        ],
+        "exact_match": true,
+        "precision": 1.0,
+        "recall": 1.0,
+        "missed_tools": [],
+        "false_positive_tools": []
+      },
+      "actual_status": "completed",
+      "actual_passed": true,
+      "llm_fallback_used": false,
+      "llm_error": null
+    },
+    {
+      "case_id": "security-friendly-001",
+      "tool_selection": {
+        "expected_tools": [
+          "completeness_check",
+          "ambiguity_check",
+          "priority_suggestion"
+        ],
+        "actual_tools": [
+          "completeness_check",
+          "ambiguity_check",
+          "priority_suggestion"
+        ],
+        "exact_match": true,
+        "precision": 1.0,
+        "recall": 1.0,
+        "missed_tools": [],
+        "false_positive_tools": []
+      },
+      "actual_status": "completed",
+      "actual_passed": false,
+      "llm_fallback_used": false,
+      "llm_error": null
+    },
+    {
+      "case_id": "login-failure-001",
+      "tool_selection": {
+        "expected_tools": [
+          "completeness_check",
+          "priority_suggestion"
+        ],
+        "actual_tools": [
+          "completeness_check",
+          "priority_suggestion"
+        ],
+        "exact_match": true,
+        "precision": 1.0,
+        "recall": 1.0,
+        "missed_tools": [],
+        "false_positive_tools": []
+      },
+      "actual_status": "completed",
+      "actual_passed": true,
+      "llm_fallback_used": false,
+      "llm_error": null
+    },
+    {
+      "case_id": "report-export-001",
+      "tool_selection": {
+        "expected_tools": [
+          "completeness_check"
+        ],
+        "actual_tools": [
+          "completeness_check"
+        ],
+        "exact_match": true,
+        "precision": 1.0,
+        "recall": 1.0,
+        "missed_tools": [],
+        "false_positive_tools": []
+      },
+      "actual_status": "completed",
+      "actual_passed": true,
+      "llm_fallback_used": false,
+      "llm_error": null
+    },
+    {
+      "case_id": "alert-exception-001",
+      "tool_selection": {
+        "expected_tools": [
+          "completeness_check",
+          "ambiguity_check",
+          "priority_suggestion"
+        ],
+        "actual_tools": [
+          "completeness_check",
+          "ambiguity_check",
+          "priority_suggestion"
+        ],
+        "exact_match": true,
+        "precision": 1.0,
+        "recall": 1.0,
+        "missed_tools": [],
+        "false_positive_tools": []
+      },
+      "actual_status": "completed",
+      "actual_passed": false,
+      "llm_fallback_used": false,
+      "llm_error": null
+    },
+    {
+      "case_id": "page-hint-001",
+      "tool_selection": {
+        "expected_tools": [
+          "completeness_check",
+          "ambiguity_check"
+        ],
+        "actual_tools": [
+          "completeness_check",
+          "ambiguity_check"
+        ],
+        "exact_match": true,
+        "precision": 1.0,
+        "recall": 1.0,
+        "missed_tools": [],
+        "false_positive_tools": []
+      },
+      "actual_status": "completed",
+      "actual_passed": false,
+      "llm_fallback_used": false,
+      "llm_error": null
+    },
+    {
+      "case_id": "timeout-error-001",
+      "tool_selection": {
+        "expected_tools": [
+          "completeness_check",
+          "priority_suggestion"
+        ],
+        "actual_tools": [
+          "completeness_check",
+          "priority_suggestion"
+        ],
+        "exact_match": true,
+        "precision": 1.0,
+        "recall": 1.0,
+        "missed_tools": [],
+        "false_positive_tools": []
+      },
+      "actual_status": "completed",
+      "actual_passed": true,
+      "llm_fallback_used": false,
+      "llm_error": null
+    }
+  ]
+}

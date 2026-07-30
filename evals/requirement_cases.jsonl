@@ -1,0 +1,10 @@
+{"case_id": "plain-copy-001", "title": "修改首页按钮文案", "content": "将首页按钮文字修改为提交", "priority": 3, "expected_tools": ["completeness_check"]}
+{"case_id": "ambiguity-speed-001", "title": "操作结果提示", "content": "系统应尽快返回操作结果", "priority": 3, "expected_tools": ["completeness_check", "ambiguity_check"]}
+{"case_id": "security-login-001", "title": "登录安全校验", "content": "用户登录时必须校验密码", "priority": 1, "expected_tools": ["completeness_check", "priority_suggestion"]}
+{"case_id": "performance-api-001", "title": "接口性能优化", "content": "接口必须在2秒内返回响应", "priority": 2, "expected_tools": ["completeness_check", "priority_suggestion"]}
+{"case_id": "security-friendly-001", "title": "安全提示优化", "content": "系统应及时返回友好的安全提示", "priority": 1, "expected_tools": ["completeness_check", "ambiguity_check", "priority_suggestion"]}
+{"case_id": "login-failure-001", "title": "修复登录故障", "content": "用户无法登录系统", "priority": 1, "expected_tools": ["completeness_check", "priority_suggestion"]}
+{"case_id": "report-export-001", "title": "导出月度报表", "content": "管理员可以导出月度报表", "priority": 3, "expected_tools": ["completeness_check"]}
+{"case_id": "alert-exception-001", "title": "异常告警", "content": "服务发生异常时应尽快通知管理员", "priority": 1, "expected_tools": ["completeness_check", "ambiguity_check", "priority_suggestion"]}
+{"case_id": "page-hint-001", "title": "页面加载提示", "content": "页面加载过程中显示合理的提示信息", "priority": 3, "expected_tools": ["completeness_check", "ambiguity_check"]}
+{"case_id": "timeout-error-001", "title": "请求超时处理", "content": "接口超时后返回错误提示", "priority": 2, "expected_tools": ["completeness_check", "priority_suggestion"]}
