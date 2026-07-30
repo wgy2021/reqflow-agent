@@ -1,11 +1,21 @@
-from typing import Any, TypedDict
 import json
-import app.agent.tools  # 触发三个分析工具注册
-from langgraph.graph import END, START, StateGraph
+from typing import Any, TypedDict
 
+from langgraph.graph import END, START, StateGraph
+from pydantic import BaseModel, ConfigDict
+
+import app.agent.tools  # 触发三个分析工具注册
 from app.agent.llm.base import LLMClient
+from app.agent.llm.fake import FakeLLMClient
 from app.agent.registry import execute_tool, list_tools
 from app.agent.state import AgentState
+
+
+LLM_FALLBACK_EXCEPTIONS = (
+    RuntimeError,
+    ValueError,
+    NotImplementedError,
+)
 
 
 class LangGraphState(TypedDict):
@@ -25,6 +35,132 @@ class LangGraphState(TypedDict):
 
     execution_order: list[str]
     final_report: str
+
+
+class LangGraphAnalysisExecution(BaseModel):
+    """保存一次需求专用 LangGraph 分析的完整结果。"""
+
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+
+    state: AgentState
+
+    passed: bool
+    planned_tools: list[str]
+    current_priority: int | None
+    suggested_priority: int | None
+    priority_consistent: bool | None
+    issues: list[str]
+
+    raw_tool_results: dict[
+        str,
+        dict[str, Any],
+    ]
+
+    final_report: str
+    llm_fallback_used: bool = False
+    llm_error: str | None = None
+
+
+class _FallbackTrackingLLMClient(LLMClient):
+    """为 LangGraph 提供可追踪的 FakeLLM 自动降级。"""
+
+    def __init__(
+        self,
+        primary_client: LLMClient,
+    ) -> None:
+        self._primary_client = primary_client
+        self._fallback_client = FakeLLMClient()
+        self._active_client = primary_client
+        self.fallback_used = False
+        self.error: str | None = None
+
+    def _activate_fallback(
+        self,
+        exc: Exception,
+    ) -> None:
+        self.fallback_used = True
+
+        error_message = str(exc)
+
+        if self.error is None:
+            self.error = error_message
+        else:
+            self.error = (
+                f"{self.error}; {error_message}"
+            )
+
+        self._active_client = self._fallback_client
+
+    def plan_tools(
+        self,
+        title: str,
+        content: str,
+        priority: int | None,
+        available_tools: list[dict[str, str]],
+    ) -> list[str]:
+        try:
+            return self._active_client.plan_tools(
+                title=title,
+                content=content,
+                priority=priority,
+                available_tools=available_tools,
+            )
+        except LLM_FALLBACK_EXCEPTIONS as exc:
+            if (
+                self._active_client
+                is self._fallback_client
+            ):
+                raise
+
+            self._activate_fallback(exc)
+
+            return self._fallback_client.plan_tools(
+                title=title,
+                content=content,
+                priority=priority,
+                available_tools=available_tools,
+            )
+
+    def generate_report(
+        self,
+        title: str,
+        content: str,
+        priority: int | None,
+        planned_tools: list[str],
+        tool_results: dict[str, dict[str, Any]],
+        issues: list[str],
+        passed: bool,
+    ) -> str:
+        try:
+            return self._active_client.generate_report(
+                title=title,
+                content=content,
+                priority=priority,
+                planned_tools=planned_tools,
+                tool_results=tool_results,
+                issues=issues,
+                passed=passed,
+            )
+        except LLM_FALLBACK_EXCEPTIONS as exc:
+            if (
+                self._active_client
+                is self._fallback_client
+            ):
+                raise
+
+            self._activate_fallback(exc)
+
+            return self._fallback_client.generate_report(
+                title=title,
+                content=content,
+                priority=priority,
+                planned_tools=planned_tools,
+                tool_results=tool_results,
+                issues=issues,
+                passed=passed,
+            )
 
 
 def _build_tool_arguments(
@@ -51,8 +187,29 @@ def _build_tool_arguments(
     }
 
 
+def _build_report_content(
+    *,
+    content: str,
+    knowledge_context: str,
+) -> str:
+    """将 RAG 上下文仅追加到报告生成输入中。"""
+
+    normalized_context = knowledge_context.strip()
+
+    if not normalized_context:
+        return content
+
+    return (
+        f"{content}\n\n"
+        "以下是从知识库检索到的参考上下文：\n"
+        f"{normalized_context}"
+    )
+
+
 def build_planner_graph(
     llm_client: LLMClient,
+    *,
+    report_content: str | None = None,
 ):
     """创建 LangGraph 需求分析流程。"""
 
@@ -77,7 +234,6 @@ def build_planner_graph(
                 + ["planner"]
             ),
         }
-
 
     def route_after_planner(
         state: LangGraphState,
@@ -143,6 +299,7 @@ def build_planner_graph(
         """汇总工具结果并生成最终报告。"""
 
         issues: list[str] = []
+
         failed_tools = {
             tool_name: result["error"]
             for tool_name, result
@@ -165,15 +322,16 @@ def build_planner_graph(
         )
 
         if (
-                completeness_result is not None
-                and "error" not in completeness_result
-                and not completeness_result["passed"]
+            completeness_result is not None
+            and "error" not in completeness_result
+            and not completeness_result["passed"]
         ):
             missing_fields = ", ".join(
                 completeness_result[
                     "missing_fields"
                 ]
             )
+
             issues.append(
                 f"缺少必要字段：{missing_fields}"
             )
@@ -185,15 +343,16 @@ def build_planner_graph(
         )
 
         if (
-                ambiguity_result is not None
-                and "error" not in ambiguity_result
-                and not ambiguity_result["passed"]
+            ambiguity_result is not None
+            and "error" not in ambiguity_result
+            and not ambiguity_result["passed"]
         ):
             matched_terms = "、".join(
                 ambiguity_result[
                     "matched_terms"
                 ]
             )
+
             issues.append(
                 f"包含模糊表达：{matched_terms}"
             )
@@ -208,8 +367,8 @@ def build_planner_graph(
         priority_consistent: bool | None = None
 
         if (
-                priority_result is not None
-                and "error" not in priority_result
+            priority_result is not None
+            and "error" not in priority_result
         ):
             suggested_priority = priority_result[
                 "suggested_priority"
@@ -230,6 +389,7 @@ def build_planner_graph(
                     )
 
         passed = bool(state["planned_tools"])
+
         if failed_tools:
             passed = False
 
@@ -239,16 +399,16 @@ def build_planner_graph(
             )
 
         if (
-                completeness_result is not None
-                and "error" not in completeness_result
-                and not completeness_result["passed"]
+            completeness_result is not None
+            and "error" not in completeness_result
+            and not completeness_result["passed"]
         ):
             passed = False
 
         if (
-                ambiguity_result is not None
-                and "error" not in ambiguity_result
-                and not ambiguity_result["passed"]
+            ambiguity_result is not None
+            and "error" not in ambiguity_result
+            and not ambiguity_result["passed"]
         ):
             passed = False
 
@@ -257,7 +417,11 @@ def build_planner_graph(
 
         final_report = llm_client.generate_report(
             title=state["title"],
-            content=state["content"],
+            content=(
+                report_content
+                if report_content is not None
+                else state["content"]
+            ),
             priority=state["priority"],
             planned_tools=state["planned_tools"],
             tool_results=state["tool_results"],
@@ -320,16 +484,29 @@ def build_planner_graph(
     return builder.compile()
 
 
-def run_langgraph_analysis(
+def execute_langgraph_analysis(
     *,
     llm_client: LLMClient,
     title: str,
     content: str,
     priority: int | None,
-) -> AgentState:
-    """运行 LangGraph，并转换为现有 AgentState。"""
+    knowledge_context: str = "",
+) -> LangGraphAnalysisExecution:
+    """运行需求专用 LangGraph，并保留完整分析结果。"""
 
-    graph = build_planner_graph(llm_client)
+    tracking_client = _FallbackTrackingLLMClient(
+        llm_client
+    )
+
+    report_content = _build_report_content(
+        content=content,
+        knowledge_context=knowledge_context,
+    )
+
+    graph = build_planner_graph(
+        tracking_client,
+        report_content=report_content,
+    )
 
     result = graph.invoke(
         {
@@ -360,7 +537,10 @@ def run_langgraph_analysis(
             "function": {
                 "name": tool_name,
                 "arguments": json.dumps(
-                    tool_arguments.get(tool_name, {}),
+                    tool_arguments.get(
+                        tool_name,
+                        {},
+                    ),
                     ensure_ascii=False,
                 ),
             },
@@ -371,7 +551,7 @@ def run_langgraph_analysis(
         )
     ]
 
-    tool_results = [
+    agent_tool_results = [
         {
             "tool_name": tool_name,
             "result": result["tool_results"][
@@ -402,7 +582,7 @@ def run_langgraph_analysis(
         else None
     )
 
-    return AgentState(
+    state = AgentState(
         status=run_status,
         step_count=len(
             result["execution_order"]
@@ -422,7 +602,46 @@ def run_langgraph_analysis(
             },
         ],
         tool_calls=tool_calls,
-        tool_results=tool_results,
+        tool_results=agent_tool_results,
         final_answer=final_report,
         error=run_error,
     )
+
+    return LangGraphAnalysisExecution(
+        state=state,
+        passed=result["passed"],
+        planned_tools=result["planned_tools"],
+        current_priority=priority,
+        suggested_priority=(
+            result["suggested_priority"]
+        ),
+        priority_consistent=(
+            result["priority_consistent"]
+        ),
+        issues=result["issues"],
+        raw_tool_results=result["tool_results"],
+        final_report=final_report,
+        llm_fallback_used=(
+            tracking_client.fallback_used
+        ),
+        llm_error=tracking_client.error,
+    )
+
+
+def run_langgraph_analysis(
+    *,
+    llm_client: LLMClient,
+    title: str,
+    content: str,
+    priority: int | None,
+) -> AgentState:
+    """运行 LangGraph，并返回通用 AgentState。"""
+
+    execution = execute_langgraph_analysis(
+        llm_client=llm_client,
+        title=title,
+        content=content,
+        priority=priority,
+    )
+
+    return execution.state
